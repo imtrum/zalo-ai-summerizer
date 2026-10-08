@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+
+# Environment variables / API keys
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE
+.vscode/
+
+# Raw and processed data
+data/raw/*
+data/processed/*
+
+# OS
+Thumbs.db
+.DS_Store

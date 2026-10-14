@@ -1,0 +1,23 @@
+[
+    {
+    "message_id": "msg_001",
+    "target_id": "group_001",
+    "sender": "Alice",
+    "content": "Cuộc họp dự án sẽ diễn ra lúc 9 giờ sáng mai.",
+    "timestamp": "2026-10-11T08:00:00"
+    },
+    {
+    "message_id": "msg_002",
+    "target_id": "group_001",
+    "sender": "Bob",
+    "content": "Tôi sẽ chuẩn bị báo cáo trước cuộc họp.",
+    "timestamp": "2026-10-11T08:05:00"
+    },
+    {
+    "message_id": "msg_003",
+    "target_id": "group_002",
+    "sender": "Carol",
+    "content": "Hạn nộp bài tập là thứ Sáu.",
+    "timestamp": "2026-10-11T08:10:00"
+}
+]

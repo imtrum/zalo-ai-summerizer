@@ -20,3 +20,30 @@ data/processed/*
 # OS
 Thumbs.db
 .DS_Store
+
+
+# Browser profile contains login-session data
+data/browser_profile/
+
+
+# Local configuration and secrets
+
+.env
+.env.*
+
+# Generated Python package metadata
+
+*.egg-info/
+
+# Logs
+
+logs/
+*.log
+
+# Test and lint caches
+
+.mypy_cache/
+.ruff_cache/
+
+# Private target configuration
+data/targets.json

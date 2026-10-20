@@ -29,7 +29,7 @@ SELECTORS = {
 }
 
 MISSING = "<THIẾU>"
-MAX_SCROLL_ROUNDS = 5       # giới hạn cứng, không cuộn vô hạn
+MAX_SCROLL_ROUNDS = 6       # giới hạn cứng, không cuộn vô hạn
 SCROLL_WAIT_MS = 1500       # chờ Zalo tải thêm sau mỗi lần cuộn lên đầu
 VN_TZ = timezone(timedelta(hours=7))
 

@@ -23,8 +23,16 @@ def load_targets() -> list[dict[str, Any]]:
 
     seen_ids: set[str] = set()
 
+
     for index, target in enumerate(targets):
-        
+        if not isinstance(target, dict):
+            raise ValueError(f"Target at index {index} must be an object.")
+
+        if not isinstance(target.get("id"), str) or not target["id"].strip():
+            raise ValueError(
+                f"Target at index {index} must have a non-empty string 'id'."
+            )
+
         target_id = target["id"].strip()
 
         if target_id in seen_ids:
@@ -34,8 +42,6 @@ def load_targets() -> list[dict[str, Any]]:
 
         seen_ids.add(target_id)
 
-        if not isinstance(target, dict):
-            raise ValueError(f"Target at index {index} must be an object.")
 
         if not isinstance(target.get("id"), str) or not target["id"].strip():
             raise ValueError(f"Target at index {index} must have a non-empty string 'id'.")

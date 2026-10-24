@@ -32,10 +32,18 @@ def main() -> None:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto("https://chat.zalo.me/")
 
-            input(
-                "Open the target group, wait for messages to appear, "
-                "then press Enter here..."
+            conversation = page.locator(
+                f'.msg-item[anim-data-id="{target_id}"]'
             )
+
+            conversation.wait_for(state="visible", timeout=15000)
+            conversation.click()
+
+            page.locator(
+                '[data-component="message-content-view"]'
+            ).first.wait_for(state="visible", timeout=15000)
+
+            print(f"Opened conversation: {target_id}")
 
             collector = ZaloMessageCollector(
                 page=page,

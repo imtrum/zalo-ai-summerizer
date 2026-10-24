@@ -1,158 +1,27 @@
 
-import re
 import unicodedata
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from playwright.sync_api import Page
 
 from zalo_ai.collector.message_collector import MessageCollector
+from zalo_ai.collector.zalo_message_parser import (
+    COLLECT_JS,
+    clean_text,
+    parse_timestamp,
+)
+from zalo_ai.collector.zalo_scroll_helper import ZaloScrollHelper
 from zalo_ai.models.message import Message
 
 
 VN_TZ = timezone(timedelta(hours=7))
 
-FRAME_SELECTOR = '[data-component="message-content-view"]'
-TEXT_SELECTOR = '[data-component="message-text-content"]'
-SENDER_SELECTOR = ".message-sender-name-content"
-TIME_SELECTOR = ".card-send-time__sendTime, .card-send-time"
-
-
-COLLECT_JS = """() => {
-    const frames = [...document.querySelectorAll(
-        '[data-component="message-content-view"]'
-    )];
-
-    const clean = (value) =>
-        (value || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
-
-    const separators = [...document.querySelectorAll('*')]
-        .filter(el =>
-            el.children.length === 0 &&
-            !el.closest('[data-component="message-content-view"]') &&
-            /^(T[2-7]\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{4}|CN\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{4}|Hôm nay|Hôm qua|\\d{1,2}\\/\\d{1,2}\\/\\d{4})$/i
-                .test(clean(el.textContent))
-        );
-
-    return frames.map((frame, index) => {
-        let row = frame;
-
-        for (let i = 0; i < 8; i++) {
-            const parent = row.parentElement;
-            if (!parent ||
-                parent.querySelectorAll(
-                    '[data-component="message-content-view"]'
-                ).length !== 1) break;
-            row = parent;
-        }
-
-        const sender = row.querySelector('.message-sender-name-content');
-        const timeElement = row.querySelector(
-            '.card-send-time__sendTime, .card-send-time'
-        );
-
-        const fullTimeElement = [...row.querySelectorAll('*')].find(el =>
-            el.children.length === 0 &&
-            /^\\d{1,2}:\\d{2}\\s+(\\d{1,2}\\/\\d{1,2}\\/\\d{4}|Hôm nay|Hôm qua)$/i
-                .test(clean(el.textContent))
-        );
-
-        let previousDate = null;
-        for (const separator of separators) {
-            if (separator.compareDocumentPosition(frame) &
-                Node.DOCUMENT_POSITION_FOLLOWING) {
-                previousDate = separator;
-            }
-        }
-
-        const ids = [];
-        for (let el = frame; el; el = el.parentElement) {
-            if (el.id) ids.push(el.id);
-            if (el === row) break;
-        }
-
-        return {
-            index,
-            message_id: ids.find(id => id.startsWith('message-frame'))
-                || ids[0] || null,
-            sender: sender ? clean(sender.innerText) : null,
-            content: [...frame.querySelectorAll(
-                '[data-component="message-text-content"]'
-            )].map(el => clean(el.innerText)).filter(Boolean).join('\\n'),
-            time_text: timeElement ? clean(timeElement.innerText) : null,
-            full_time_text: fullTimeElement
-                ? clean(fullTimeElement.textContent) : null,
-            date_separator: previousDate ? clean(previousDate.textContent) : null
-        };
-    });
-}"""
-
-
-def clean_text(value: str | None) -> str | None:
-    if not value:
-        return None
-    return value.strip() or None
-
-
-def parse_date(value: str | None) -> date | None:
-    if not value:
-        return None
-
-    match = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", value)
-    if match:
-        day, month, year = map(int, match.groups())
-        try:
-            return date(year, month, day)
-        except ValueError:
-            return None
-
-    lowered = value.lower()
-    today = datetime.now(VN_TZ).date()
-
-    if "hôm nay" in lowered:
-        return today
-    if "hôm qua" in lowered:
-        return today - timedelta(days=1)
-
-    return None
-
-
-def parse_timestamp(record: dict) -> datetime | None:
-    """Return a timestamp only when both date and time are identifiable."""
-
-    full_text = record.get("full_time_text") or ""
-    full_match = re.search(
-        r"(\d{1,2}):(\d{2})\s+(.*)",
-        full_text,
-    )
-
-    if full_match:
-        hour, minute = map(int, full_match.groups()[:2])
-        message_date = parse_date(full_match.group(3))
-    else:
-        time_text = record.get("time_text") or ""
-        time_match = re.search(r"\b(\d{1,2}):(\d{2})\b", time_text)
-
-        if not time_match:
-            return None
-
-        hour, minute = map(int, time_match.groups())
-        message_date = parse_date(record.get("date_separator"))
-
-    if message_date is None:
-        return None
-
-    try:
-        return datetime.combine(
-            message_date,
-            time(hour, minute),
-            tzinfo=VN_TZ,
-        )
-    except ValueError:
-        return None
+MAX_SCROLL_ROUNDS = 100
+SCROLL_WAIT_MS = 1000
 
 
 class ZaloMessageCollector(MessageCollector):
-    """Collect currently rendered messages from an open Zalo chat."""
+    """Collect Zalo messages by scrolling back to a cutoff time."""
 
     def __init__(
         self,
@@ -171,17 +40,32 @@ class ZaloMessageCollector(MessageCollector):
         self.page = page
         self.target_id = target_id
         self.cutoff = cutoff
+        self.scroll_helper = ZaloScrollHelper(page)
 
-    def collect_messages(self) -> list[Message]:
-        """Extract visible messages whose timestamps are at or after cutoff."""
+    @staticmethod
+    def _record_key(record: dict) -> tuple:
+        """Build a stable key for comparing rendered message records."""
+        return (
+            record.get("message_id"),
+            record.get("full_time_text"),
+            record.get("time_text"),
+            record.get("date_separator"),
+            record.get("sender"),
+            record.get("content"),
+        )
 
+    def _collect_snapshot(
+        self,
+        collected: dict[tuple, Message],
+    ) -> bool:
+        """Collect one rendered snapshot. Return True if cutoff is reached."""
         records = self.page.evaluate(COLLECT_JS)
-        messages: list[Message] = []
-        seen: set[tuple] = set()
         last_sender: str | None = None
+        cutoff_reached = False
 
         for record in records:
             sender = clean_text(record.get("sender"))
+
             if sender:
                 last_sender = sender
             else:
@@ -190,38 +74,106 @@ class ZaloMessageCollector(MessageCollector):
             content = clean_text(record.get("content"))
             timestamp = parse_timestamp(record)
 
-            # Do not invent missing dates, times, senders, or message content.
+            # Never guess missing message information.
             if not content or not sender or timestamp is None:
                 continue
 
             if timestamp < self.cutoff:
+                cutoff_reached = True
                 continue
 
             message_id = record.get("message_id")
             if not message_id:
                 message_id = (
-                    f"fallback-{timestamp.isoformat()}-"
-                    f"{sender}-{content}"
+                    f"fallback-{timestamp.isoformat()}-{sender}-{content}"
                 )
 
             key = (
-                message_id,
+                str(message_id),
                 timestamp.isoformat(),
                 unicodedata.normalize("NFKC", content),
             )
 
-            if key in seen:
-                continue
-            seen.add(key)
-
-            messages.append(
-                Message(
+            if key not in collected:
+                collected[key] = Message(
                     message_id=str(message_id),
                     target_id=self.target_id,
                     sender=sender,
                     content=content,
                     timestamp=timestamp,
                 )
+
+        return cutoff_reached
+
+    def collect_messages(self) -> list[Message]:
+        """Collect messages at or after cutoff, loading older history as needed."""
+        collected: dict[tuple, Message] = {}
+
+        scroller = self.scroll_helper.find_scroller()
+
+        # If the scroll container cannot be identified, collect what's visible.
+        if scroller is None:
+            self._collect_snapshot(collected)
+            return sorted(
+                collected.values(),
+                key=lambda message: message.timestamp,
             )
 
-        return messages
+        try:
+            for _ in range(MAX_SCROLL_ROUNDS):
+                if self._collect_snapshot(collected):
+                    break
+
+                before_records = self.page.evaluate(COLLECT_JS)
+                before_keys = {
+                    self._record_key(record) for record in before_records
+                }
+                before_height = scroller.evaluate(
+                    "(el) => el.scrollHeight"
+                )
+
+                self.scroll_helper.scroll_up(scroller)
+                self.page.wait_for_timeout(SCROLL_WAIT_MS)
+
+                if self._collect_snapshot(collected):
+                    break
+
+                after_records = self.page.evaluate(COLLECT_JS)
+                after_keys = {
+                    self._record_key(record) for record in after_records
+                }
+                after_height = scroller.evaluate(
+                    "(el) => el.scrollHeight"
+                )
+
+                # If direct scrolling did not load anything, try the mouse wheel.
+                if (
+                    after_keys == before_keys
+                    and after_height == before_height
+                ):
+                    self.scroll_helper.scroll_up_with_wheel(scroller)
+                    self.page.wait_for_timeout(SCROLL_WAIT_MS)
+
+                    if self._collect_snapshot(collected):
+                        break
+
+                    wheel_records = self.page.evaluate(COLLECT_JS)
+                    wheel_keys = {
+                        self._record_key(record) for record in wheel_records
+                    }
+                    wheel_height = scroller.evaluate(
+                        "(el) => el.scrollHeight"
+                    )
+
+                    if (
+                        wheel_keys == before_keys
+                        and wheel_height == before_height
+                    ):
+                        break
+        finally:
+            scroller.dispose()
+
+        return sorted(
+            collected.values(),
+            key=lambda message: message.timestamp,
+        )

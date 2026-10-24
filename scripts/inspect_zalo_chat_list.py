@@ -92,29 +92,38 @@ def main() -> None:
                 print("\nFound a scrollable conversation container.")
 
             seen_names: set[str] = set()
-            conversations: list[str] = []
+            conversations: list[dict[str, str | None]] = []
 
             unchanged_rounds = 0
             previous_scroll_top = -1
 
             while unchanged_rounds < 3:
-                # Collect names currently rendered by Zalo.
-                visible_names = page.locator(".msg-item").evaluate_all(
+                # Collect currently rendered conversations and ID attributes.
+                visible_conversations = page.locator(
+                    ".msg-item"
+                ).evaluate_all(
                     """items => items.map(item => {
                         const name = item.querySelector(
                             ".conv-item-title__name"
                         );
 
-                        return name
-                            ? name.innerText.trim().replace(/\\u00a0/g, " ")
-                            : null;
+                        return {
+                            name: name
+                                ? name.innerText.trim().replace(/\\u00a0/g, " ")
+                                : null,
+                            element_id: item.id || null,
+                            data_id: item.getAttribute("data-id"),
+                            anim_data_id: item.getAttribute("anim-data-id"),
+                        };
                     })"""
                 )
 
-                for name in visible_names:
+                for conversation in visible_conversations:
+                    name = conversation["name"]
+
                     if name and name not in seen_names:
                         seen_names.add(name)
-                        conversations.append(name)
+                        conversations.append(conversation)
 
                 if scroll_container is None:
                     break
@@ -124,7 +133,7 @@ def main() -> None:
                 if element is None:
                     break
 
-                # Scroll the actual container and measure its position.
+                # Scroll the actual conversation-list container.
                 current_scroll_top = element.evaluate(
                     "(element) => element.scrollTop"
                 )
@@ -156,8 +165,14 @@ def main() -> None:
 
             print(f"\nDiscovered {len(conversations)} conversations:")
 
-            for index, name in enumerate(conversations, start=1):
-                print(f"{index}. {name}")
+            for index, conversation in enumerate(conversations, start=1):
+                print(
+                    f"{index}. "
+                    f"name={conversation['name']!r}, "
+                    f"element_id={conversation['element_id']!r}, "
+                    f"data_id={conversation['data_id']!r}, "
+                    f"anim_data_id={conversation['anim_data_id']!r}"
+                )
 
         finally:
             context.close()

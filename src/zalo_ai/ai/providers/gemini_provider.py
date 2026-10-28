@@ -48,4 +48,14 @@ class GeminiProvider:
                 "The response may have been blocked or empty."
             )
 
+        if response.candidates:
+            finish_reason = response.candidates[0].finish_reason
+
+            if finish_reason == types.FinishReason.MAX_TOKENS:
+                raise RuntimeError(
+                    "Gemini summary was truncated because it reached "
+                    "the output-token limit. Increase AI_MAX_TOKENS "
+                    "or summarize fewer messages per request."
+                )
+
         return response.text.strip()

@@ -33,6 +33,8 @@ class GeminiProvider:
         if not prompt.strip():
             raise ValueError("Prompt cannot be empty.")
 
+        print(f"Max tokens per request = {settings.AI_MAX_TOKENS}")
+
         response = self.client.models.generate_content(
             model=settings.AI_MODEL,
             contents=prompt,
@@ -41,6 +43,18 @@ class GeminiProvider:
                 max_output_tokens=settings.AI_MAX_TOKENS,
             ),
         )
+
+        usage = response.usage_metadata
+        if usage is not None:
+            print(
+                f"[Gemini tokens] model={settings.AI_MODEL} "
+                f"input={usage.prompt_token_count or 0} "
+                f"output={usage.candidates_token_count or 0} "
+                f"thinking={usage.thoughts_token_count or 0} "
+                f"total={usage.total_token_count or 0}"
+            )
+        else:
+            print(f"[Gemini tokens] model={settings.AI_MODEL} usage unavailable")
 
         if response.text is None:
             raise RuntimeError(

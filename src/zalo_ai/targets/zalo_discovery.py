@@ -1,5 +1,4 @@
-
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import ElementHandle, Page, TimeoutError as PlaywrightTimeoutError
 
 
 CONVERSATION_SELECTOR = ".msg-item"
@@ -7,7 +6,6 @@ CONVERSATION_NAME_SELECTOR = ".conv-item-title__name"
 SCROLL_CONTAINER_SELECTOR = (
     ".ReactVirtualized__Grid__innerScrollContainer"
 )
-
 
 
 def discover_conversations(
@@ -140,8 +138,46 @@ def discover_conversations(
     return list(conversations.values())
 
 
+def get_visible_conversation_ids(
+    scroll_container: ElementHandle,
+) -> list[str]:
+    """Return IDs of rows intersecting the conversation-list viewport."""
+    return scroll_container.evaluate(
+        """container => {
+            const viewport = container.getBoundingClientRect();
+
+            return Array.from(
+                document.querySelectorAll(".msg-item")
+            )
+                .filter(item => {
+                    const row = item.getBoundingClientRect();
+                    return (
+                        row.bottom > viewport.top &&
+                        row.top < viewport.bottom &&
+                        row.right > viewport.left &&
+                        row.left < viewport.right
+                    );
+                })
+                .map(item => item.getAttribute("anim-data-id") || "")
+                .filter(Boolean);
+        }"""
+    )
 
 
+def open_visible_conversation(
+    page: Page,
+    target_id: str,
+) -> bool:
+    """Open a target only if its row is already visible in the list."""
+    locator = page.locator(
+        f'.msg-item[anim-data-id="{target_id}"]'
+    )
+
+    if not locator.count() or not locator.is_visible():
+        return False
+
+    locator.click()
+    return True
 
 
 def find_conversation(
@@ -237,4 +273,3 @@ def open_conversation(
     finally:
         scroll_container.dispose()
         container.dispose()
-

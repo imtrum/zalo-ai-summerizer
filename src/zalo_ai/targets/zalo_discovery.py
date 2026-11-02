@@ -1,5 +1,4 @@
-
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import ElementHandle, Page, TimeoutError as PlaywrightTimeoutError
 
 
 CONVERSATION_SELECTOR = ".msg-item"
@@ -7,7 +6,6 @@ CONVERSATION_NAME_SELECTOR = ".conv-item-title__name"
 SCROLL_CONTAINER_SELECTOR = (
     ".ReactVirtualized__Grid__innerScrollContainer"
 )
-
 
 
 def discover_conversations(
@@ -140,101 +138,46 @@ def discover_conversations(
     return list(conversations.values())
 
 
+def get_visible_conversation_ids(
+    scroll_container: ElementHandle,
+) -> list[str]:
+    """Return IDs of rows intersecting the conversation-list viewport."""
+    return scroll_container.evaluate(
+        """container => {
+            const viewport = container.getBoundingClientRect();
 
-
-
-
-def find_conversation(
-    page: Page,
-    target_id: str,
-) -> bool:
-    """Find a conversation by ID while scrolling the chat list."""
-    conversations = discover_conversations(page)
-
-    return any(
-        conversation["id"] == target_id
-        for conversation in conversations
+            return Array.from(
+                document.querySelectorAll(".msg-item")
+            )
+                .filter(item => {
+                    const row = item.getBoundingClientRect();
+                    return (
+                        row.bottom > viewport.top &&
+                        row.top < viewport.bottom &&
+                        row.right > viewport.left &&
+                        row.left < viewport.right
+                    );
+                })
+                .map(item => item.getAttribute("anim-data-id") || "")
+                .filter(Boolean);
+        }"""
     )
 
 
-def open_conversation(
+def open_visible_conversation(
     page: Page,
     target_id: str,
-    max_scrolls: int = 30,
 ) -> bool:
-    """Scroll the conversation list until the target row is rendered."""
+    """Open a target only if its row is already visible in the list."""
     locator = page.locator(
         f'.msg-item[anim-data-id="{target_id}"]'
     )
 
-    if locator.count() and locator.is_visible():
-        locator.click()
-        return True
-
-    container = page.locator(
-        SCROLL_CONTAINER_SELECTOR
-    ).evaluate_handle(
-        """element => {
-            for (
-                let current = element;
-                current && current !== document.body;
-                current = current.parentElement
-            ) {
-                const style = getComputedStyle(current);
-                if (
-                    current.scrollHeight > current.clientHeight &&
-                    ["auto", "scroll", "overlay"].includes(style.overflowY)
-                ) {
-                    return current;
-                }
-            }
-            return null;
-        }"""
-    )
-
-    scroll_container = container.as_element()
-    if scroll_container is None:
-        container.dispose()
+    if not locator.count() or not locator.is_visible():
         return False
 
-    try:
-        # Start at the top so targets above the current position are checked.
-        scroll_container.evaluate(
-            "(element) => { element.scrollTop = 0; }"
-        )
+    locator.click()
+    return True
 
-        for _ in range(max_scrolls):
-            if locator.count() and locator.is_visible():
-                locator.click()
-                return True
 
-            old_top = scroll_container.evaluate(
-                "(element) => element.scrollTop"
-            )
-            scroll_container.evaluate(
-                """element => {
-                    element.scrollTop += Math.max(
-                        300, element.clientHeight * 0.8
-                    );
-                }"""
-            )
-            page.wait_for_timeout(500)
-
-            new_top = scroll_container.evaluate(
-                "(element) => element.scrollTop"
-            )
-
-            if new_top == old_top:
-                break
-
-        # Check the final visible rows.
-        if locator.count() and locator.is_visible():
-            locator.click()
-            return True
-
-        return False
-
-    finally:
-        scroll_container.dispose()
-        container.dispose()
 

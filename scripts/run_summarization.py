@@ -169,7 +169,7 @@ def main() -> None:
                                 processed_ids.add(target_id)
 
                         # Scan twice to catch any rows missed during the first pass.
-                        for scan_number in range(2):
+                        for _ in range(2):
                             scroll_container.evaluate(
                                 "(element) => { element.scrollTop = 0; }"
                             )
@@ -239,7 +239,7 @@ def main() -> None:
 
         for target_id, summary in summaries.items():
             logger.info("Summary generated for target: %s", target_id)
-            print(f"\\n=== Summary for {target_id} ===")
+            print(f"\n=== Summary for {target_id} ===")
             print(summary)
 
         logger.info("Live Zalo summarization workflow completed.")

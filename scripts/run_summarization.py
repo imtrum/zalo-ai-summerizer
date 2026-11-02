@@ -1,4 +1,3 @@
-
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,7 +12,11 @@ from zalo_ai.summarizer.batch_summarization_service import (
 )
 from zalo_ai.summarizer.summarization_service import SummarizationService
 from zalo_ai.targets.json_store import get_enabled_targets
-from zalo_ai.targets.zalo_discovery import find_conversation,discover_conversations, open_conversation
+from zalo_ai.targets.zalo_discovery import (
+    SCROLL_CONTAINER_SELECTOR,
+    get_visible_conversation_ids,
+    open_visible_conversation,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +32,9 @@ def main() -> None:
         logger.info("Starting live Zalo summarization workflow.")
 
         enabled_targets = get_enabled_targets()
+        enabled_targets_by_id = {
+            target["id"]: target for target in enabled_targets
+        }
 
         if not enabled_targets:
             logger.warning("No enabled targets found. Nothing to summarize.")
@@ -44,6 +50,7 @@ def main() -> None:
         ).replace(tzinfo=VN_TZ)
 
         all_messages = []
+        processed_ids: set[str] = set()
 
         with sync_playwright() as playwright:
             context = playwright.chromium.launch_persistent_context(
@@ -64,40 +71,153 @@ def main() -> None:
                     "then press Enter..."
                 )
 
-                for target in enabled_targets:
-                    target_id = target["id"]
-                    target_name = target["name"]
+                scroll_handle = page.locator(
+                    SCROLL_CONTAINER_SELECTOR
+                ).evaluate_handle(
+                    """element => {
+                        for (
+                            let current = element;
+                            current && current !== document.body;
+                            current = current.parentElement
+                        ) {
+                            const style = getComputedStyle(current);
+                            if (
+                                current.scrollHeight > current.clientHeight &&
+                                ["auto", "scroll", "overlay"].includes(
+                                    style.overflowY
+                                )
+                            ) {
+                                return current;
+                            }
+                        }
+                        return null;
+                    }"""
+                )
+                scroll_container = scroll_handle.as_element()
 
-                    logger.info("Opening conversation: %s", target_name)
-
-                    if not open_conversation(page, target_id):
-                        logger.warning(
-                            "Could not find conversation '%s' (ID: %s). Skipping.",
-                            target_name,
-                            target_id,
+                try:
+                    if scroll_container is None:
+                        logger.error(
+                            "Could not find the scrollable conversation list."
                         )
-                        continue
+                    else:
+                        def process_visible_targets() -> None:
+                            checked_at_position: set[str] = set()
 
-                    page.locator(
-                        '[data-component="message-content-view"]'
-                    ).first.wait_for(
-                        state="visible",
-                        timeout=15000,
-                    )
+                            while True:
+                                visible_ids = get_visible_conversation_ids(
+                                    scroll_container
+                                )
+                                target_id = next(
+                                    (
+                                        conversation_id
+                                        for conversation_id in visible_ids
+                                        if conversation_id
+                                        in enabled_targets_by_id
+                                        and conversation_id
+                                        not in processed_ids
+                                        and conversation_id
+                                        not in checked_at_position
+                                    ),
+                                    None,
+                                )
 
-                    collector = ZaloMessageCollector(
-                        page=page,
-                        target_id=target_id,
-                        cutoff=cutoff,
-                    )
-                    messages = collector.collect_messages()
+                                if target_id is None:
+                                    return
 
-                    logger.info(
-                        "Collected %d messages from %s.",
-                        len(messages),
-                        target_name,
-                    )
-                    all_messages.extend(messages)
+                                checked_at_position.add(target_id)
+                                target = enabled_targets_by_id[target_id]
+                                target_name = target["name"]
+
+                                logger.info(
+                                    "Opening conversation: %s",
+                                    target_name,
+                                )
+
+                                if not open_visible_conversation(
+                                    page,
+                                    target_id,
+                                ):
+                                    logger.debug(
+                                        "Conversation row %s is no longer "
+                                        "visible; it will be checked again "
+                                        "after scrolling.",
+                                        target_id,
+                                    )
+                                    continue
+
+                                page.locator(
+                                    '[data-component="message-content-view"]'
+                                ).first.wait_for(
+                                    state="visible",
+                                    timeout=15000,
+                                )
+
+                                collector = ZaloMessageCollector(
+                                    page=page,
+                                    target_id=target_id,
+                                    cutoff=cutoff,
+                                )
+                                messages = collector.collect_messages()
+
+                                logger.info(
+                                    "Collected %d messages from %s.",
+                                    len(messages),
+                                    target_name,
+                                )
+                                all_messages.extend(messages)
+                                processed_ids.add(target_id)
+
+                        # Scan twice to catch any rows missed during the first pass.
+                        for scan_number in range(2):
+                            scroll_container.evaluate(
+                                "(element) => { element.scrollTop = 0; }"
+                            )
+                            page.wait_for_timeout(500)
+
+                            unchanged_rounds = 0
+                            while unchanged_rounds < 3:
+                                process_visible_targets()
+
+                                position = scroll_container.evaluate(
+                                    """element => ({
+                                        top: element.scrollTop,
+                                        max: element.scrollHeight
+                                            - element.clientHeight
+                                    })"""
+                                )
+                                if position["top"] >= position["max"]:
+                                    break
+
+                                scroll_container.evaluate(
+                                    """element => {
+                                        element.scrollTop += Math.max(
+                                            300, element.clientHeight * 0.8
+                                        );
+                                    }"""
+                                )
+                                page.wait_for_timeout(500)
+
+                                new_top = scroll_container.evaluate(
+                                    "(element) => element.scrollTop"
+                                )
+                                if new_top == position["top"]:
+                                    unchanged_rounds += 1
+                                else:
+                                    unchanged_rounds = 0
+
+                        for target_id, target in enabled_targets_by_id.items():
+                            if target_id not in processed_ids:
+                                logger.warning(
+                                    "Could not find conversation '%s' "
+                                    "(ID: %s) during the list scan.",
+                                    target["name"],
+                                    target_id,
+                                )
+                finally:
+                    if scroll_container is not None:
+                        scroll_container.dispose()
+                    scroll_handle.dispose()
 
             finally:
                 context.close()
@@ -119,7 +239,7 @@ def main() -> None:
 
         for target_id, summary in summaries.items():
             logger.info("Summary generated for target: %s", target_id)
-            print(f"\n=== Summary for {target_id} ===")
+            print(f"\\n=== Summary for {target_id} ===")
             print(summary)
 
         logger.info("Live Zalo summarization workflow completed.")

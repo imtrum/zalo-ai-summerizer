@@ -8,6 +8,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 TARGETS_FILE = PROJECT_ROOT / "data" / "targets.json"
 
 
+def ensure_targets_file() -> None:
+    """Create an empty target store when the project has none yet."""
+    if TARGETS_FILE.exists():
+        return
+
+    TARGETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TARGETS_FILE.write_text(
+        '{"targets": []}\\n',
+        encoding="utf-8",
+    )
+
+
 def _read_data() -> dict[str, Any]:
     """Read the target JSON document."""
     with TARGETS_FILE.open("r", encoding="utf-8") as file:

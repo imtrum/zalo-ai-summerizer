@@ -237,9 +237,17 @@ def main() -> None:
         )
         summaries = batch_service.summarize_messages(all_messages)
 
+        targets_by_id = {
+            target["id"]: target["name"]
+            for target in enabled_targets
+        }
+        
         for target_id, summary in summaries.items():
-            logger.info("Summary generated for target: %s", target_id)
-            print(f"\n=== Summary for {target_id} ===")
+
+            target_name = targets_by_id.get(target_id,target_id)
+
+            logger.info("Summary generated for target: %s", target_name)
+            print(f"\n=== Summary for {target_name} ===")
             print(summary)
 
         logger.info("Live Zalo summarization workflow completed.")

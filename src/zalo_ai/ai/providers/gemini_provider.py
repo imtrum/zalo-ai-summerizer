@@ -1,13 +1,13 @@
+import time
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from zalo_ai.config import settings
 
 
 class GeminiProvider:
     """Generate text using the Google Gemini API."""
-
 
     def __init__(self) -> None:
         if not settings.GEMINI_API_KEY:
@@ -26,8 +26,6 @@ class GeminiProvider:
             api_key=settings.GEMINI_API_KEY
         )
 
-
-
     def generate(self, prompt: str) -> str:
         """Send a prompt to Gemini and return the generated text."""
         if not prompt.strip():
@@ -35,26 +33,40 @@ class GeminiProvider:
 
         print(f"Max tokens per request = {settings.AI_MAX_TOKENS}")
 
-        response = self.client.models.generate_content(
-            model=settings.AI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=settings.AI_TEMPERATURE,
-                max_output_tokens=settings.AI_MAX_TOKENS,
-            ),
-        )
+        for attempt in range(3):
+            try:
+                response = self.client.models.generate_content(
+                    model=settings.AI_MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=settings.AI_TEMPERATURE,
+                        max_output_tokens=settings.AI_MAX_TOKENS,
+                    ),
+                )
+                break
+
+            except errors.ServerError as exc:
+                if exc.code != 503 or attempt == 2:
+                    raise
+
+                delay = 5 * (2 ** attempt)
+                print(
+                    "Gemini is temporarily busy. "
+                    f"Retrying in {delay} seconds..."
+                )
+                time.sleep(delay)
 
         usage = response.usage_metadata
         if usage is not None:
             print(
                 f"[Gemini tokens] model={settings.AI_MODEL} "
-                f"input={usage.prompt_token_count or 0} "
-                f"output={usage.candidates_token_count or 0} "
-                f"thinking={usage.thoughts_token_count or 0} "
                 f"total={usage.total_token_count or 0}"
             )
         else:
-            print(f"[Gemini tokens] model={settings.AI_MODEL} usage unavailable")
+            print(
+                f"[Gemini tokens] model={settings.AI_MODEL} "
+                "usage unavailable"
+            )
 
         if response.text is None:
             raise RuntimeError(

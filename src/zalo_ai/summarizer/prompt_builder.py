@@ -1,9 +1,9 @@
-
 from zalo_ai.models.message_batch import MessageBatch
+from zalo_ai.summarizer.prompt_store import load_prompt
 
 
 def build_summarization_prompt(batch: MessageBatch) -> str:
-    """Build a prompt containing the messages to summarize."""
+    """Build a prompt from saved instructions and one message batch."""
     formatted_messages = []
 
     for message in batch.get_messages():
@@ -13,11 +13,10 @@ def build_summarization_prompt(batch: MessageBatch) -> str:
         )
 
     messages_text = "\n".join(formatted_messages)
+    instructions = load_prompt()
 
     return (
-        "Summarize the following conversation in Vietnamese.\n"
-        "Preserve important information, decisions, tasks, and deadlines.\n"
-        "Do not invent information that is not present in the messages.\n\n"
+        f"{instructions}\n\n"
         f"Target ID: {batch.target_id}\n\n"
         f"Messages:\n{messages_text}"
     )

@@ -47,3 +47,6 @@ logs/
 
 # Private target configuration
 data/targets.json
+
+# User-customized summarization prompt
+data/summarization_prompt.txt

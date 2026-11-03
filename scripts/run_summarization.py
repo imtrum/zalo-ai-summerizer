@@ -33,7 +33,7 @@ def main() -> None:
 
         for target_id, summary in summaries.items():
             target_name = target_names.get(target_id, target_id)
-            print(f"\\n=== Summary for {target_name} ===")
+            print(f"\n=== Summary for {target_name} ===")
             print(summary)
     except (FileNotFoundError, ValueError) as exc:
         logger.error("Cannot process input: %s", exc)

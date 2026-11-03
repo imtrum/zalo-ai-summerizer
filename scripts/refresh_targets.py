@@ -17,12 +17,12 @@ def main() -> None:
             print("No conversations were discovered.")
             return
 
-        print("\\nDiscovered conversations:")
+        print("\nDiscovered conversations:")
         for index, conversation in enumerate(conversations, start=1):
             print(f"{index}. {conversation['name']}")
 
         print(
-            "\\nEnter the numbers of the conversations you want to add, "
+            "\nEnter the numbers of the conversations you want to add, "
             "separated by commas."
         )
         print("Example: 1,3,5")
@@ -54,7 +54,7 @@ def main() -> None:
         ]
         added_count = save_discovered_targets(selected)
 
-        print(f"\\nSelected {len(selected)} conversations.")
+        print(f"\nSelected {len(selected)} conversations.")
         print(f"Added {added_count} new targets to targets.json.")
         print(
             "Existing targets were preserved. "

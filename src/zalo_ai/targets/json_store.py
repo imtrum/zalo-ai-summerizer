@@ -15,7 +15,7 @@ def ensure_targets_file() -> None:
 
     TARGETS_FILE.parent.mkdir(parents=True, exist_ok=True)
     TARGETS_FILE.write_text(
-        '{"targets": []}\\n',
+        '{"targets": []}\n',
         encoding="utf-8",
     )
 

@@ -14,6 +14,7 @@ from zalo_ai.summarizer.batch_summarization_service import (
 from zalo_ai.summarizer.summarization_service import SummarizationService
 from zalo_ai.targets.json_store import (
     add_selected_targets,
+    ensure_targets_file,
     get_enabled_targets,
 )
 from zalo_ai.targets.zalo_discovery import (
@@ -263,4 +264,5 @@ def save_discovered_targets(
     conversations: list[dict[str, str]],
 ) -> int:
     """Save selected discovered conversations to the target store."""
+    ensure_targets_file()
     return add_selected_targets(conversations)

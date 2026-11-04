@@ -41,8 +41,64 @@ class GeminiProvider:
             api_key=settings.GEMINI_API_KEY
         )
 
+    @staticmethod
+    def _log_usage(model: str, response) -> None:
+        usage = response.usage_metadata
+        if usage is not None:
+            print(
+                f"[Gemini tokens] model={model} "
+                f"total={usage.total_token_count or 0}"
+            )
+        else:
+            print(f"[Gemini tokens] model={model} usage unavailable")
+
+    @staticmethod
+    def _response_metadata(response) -> str:
+        prompt_feedback = getattr(response, "prompt_feedback", None)
+        candidate_details = []
+
+        for candidate in response.candidates or []:
+            content = getattr(candidate, "content", None)
+            parts = getattr(content, "parts", None) or []
+            candidate_details.append({
+                "finish_reason": str(
+                    getattr(candidate, "finish_reason", None)
+                ),
+                "safety_ratings": [
+                    {
+                        "category": str(
+                            getattr(rating, "category", None)
+                        ),
+                        "probability": str(
+                            getattr(rating, "probability", None)
+                        ),
+                        "blocked": getattr(rating, "blocked", None),
+                    }
+                    for rating in (
+                        getattr(candidate, "safety_ratings", None) or []
+                    )
+                ],
+                "parts": [
+                    {
+                        "text_length": len(part.text)
+                        if isinstance(getattr(part, "text", None), str)
+                        else 0,
+                        "thought": getattr(part, "thought", None),
+                        "has_function_call": (
+                            getattr(part, "function_call", None) is not None
+                        ),
+                    }
+                    for part in parts
+                ],
+            })
+
+        return (
+            f"prompt_feedback={prompt_feedback!r}; "
+            f"candidates={candidate_details!r}"
+        )
+
     def generate(self, prompt: str) -> str:
-        """Generate with fallback models on quota or capacity errors."""
+        """Generate text, retrying transient failures and switching models."""
         if not prompt.strip():
             raise ValueError("Prompt cannot be empty.")
 
@@ -59,7 +115,7 @@ class GeminiProvider:
 
             for attempt in range(3):
                 try:
-                    response = self.client.models.generate_content(
+                    candidate_response = self.client.models.generate_content(
                         model=model,
                         contents=prompt,
                         config=types.GenerateContentConfig(
@@ -67,10 +123,6 @@ class GeminiProvider:
                             max_output_tokens=settings.AI_MAX_TOKENS,
                         ),
                     )
-                    used_model = model
-                    self.active_model_index = model_index
-                    break
-
                 except errors.APIError as exc:
                     if exc.code == 503 and attempt < 2:
                         delay = 5 * (2 ** attempt)
@@ -85,6 +137,7 @@ class GeminiProvider:
                         if model_index + 1 < len(self.models):
                             next_model = self.models[model_index + 1]
                             self.active_model_index = model_index + 1
+                            response = None
                             print(
                                 f"Gemini model '{model}' returned "
                                 f"{exc.code} ({exc.status}). "
@@ -109,60 +162,48 @@ class GeminiProvider:
                         f"'{model}': {type(exc).__name__}: {exc}"
                     ) from exc
 
+                self._log_usage(model, candidate_response)
+                candidate_text = candidate_response.text
+                if candidate_text is None or not candidate_text.strip():
+                    metadata = self._response_metadata(candidate_response)
+                    print(f"[Gemini response metadata] {metadata}")
+
+                    if model_index + 1 < len(self.models):
+                        next_model = self.models[model_index + 1]
+                        self.active_model_index = model_index + 1
+                        response = None
+                        print(
+                            f"Gemini model '{model}' returned no usable text. "
+                            f"Switching to '{next_model}'."
+                        )
+                        break
+
+                    if attempt < 2:
+                        delay = 5 * (2 ** attempt)
+                        print(
+                            f"Gemini model '{model}' returned no usable text. "
+                            f"Retrying in {delay} seconds..."
+                        )
+                        time.sleep(delay)
+                        continue
+
+                    raise GeminiProviderError(
+                        f"Gemini model '{model}' returned no text after "
+                        f"three attempts. Response metadata: {metadata}"
+                    )
+
+                response = candidate_response
+                used_model = model
+                self.active_model_index = model_index
+                break
+
             if response is not None:
                 break
 
         if response is None:
             raise GeminiProviderError(
-                "Gemini did not return a response from any configured model."
-            )
-
-        usage = response.usage_metadata
-        if usage is not None:
-            print(
-                f"[Gemini tokens] model={used_model} "
-                f"total={usage.total_token_count or 0}"
-            )
-        else:
-            print(
-                f"[Gemini tokens] model={used_model} "
-                "usage unavailable"
-            )
-
-        if response.text is None:
-            prompt_feedback = getattr(response, "prompt_feedback", None)
-            candidate_details = []
-
-            for candidate in response.candidates or []:
-                candidate_details.append({
-                    "finish_reason": str(
-                        getattr(candidate, "finish_reason", None)
-                    ),
-                    "safety_ratings": [
-                        {
-                            "category": str(
-                                getattr(rating, "category", None)
-                            ),
-                            "probability": str(
-                                getattr(rating, "probability", None)
-                            ),
-                            "blocked": getattr(rating, "blocked", None),
-                        }
-                        for rating in (
-                            getattr(candidate, "safety_ratings", None) or []
-                        )
-                    ],
-                })
-
-            metadata = (
-                f"prompt_feedback={prompt_feedback!r}; "
-                f"candidates={candidate_details!r}"
-            )
-            print(f"[Gemini response metadata] {metadata}")
-
-            raise GeminiProviderError(
-                f"Gemini model '{used_model}' returned no text. "
-                f"Response metadata: {metadata}"
+                "Gemini did not return a usable response from any "
+                "configured model."
             )
 
         if response.candidates:

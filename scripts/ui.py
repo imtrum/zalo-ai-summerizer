@@ -196,7 +196,6 @@ class ZaloSummarizerUI:
         widget.configure(
             background=colors["field"],
             foreground=colors["text"],
-            insertbackground=colors["text"],
             selectbackground=colors["selection"],
             selectforeground="#ffffff",
             highlightbackground=colors["border"],
@@ -205,6 +204,8 @@ class ZaloSummarizerUI:
             relief="flat",
             borderwidth=0,
         )
+        if isinstance(widget, tk.Text):
+            widget.configure(insertbackground=colors["text"])
 
     def _build_ui(self) -> None:
         container = ttk.Frame(self.root, padding=14)

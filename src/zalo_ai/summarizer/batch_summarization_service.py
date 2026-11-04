@@ -21,13 +21,18 @@ class BatchSummarizationService:
         self,
         messages: list[Message],
         on_status: Callable[[str], None] | None = None,
+        target_names: dict[str, str] | None = None,
     ) -> dict[str, str]:
         """Return one summary per target and report each generation step."""
         batches = create_batches(messages)
         summaries: dict[str, str] = {}
 
         for batch in batches:
-            message = f"Generating summary for target {batch.target_id}."
+            target_name = (target_names or {}).get(
+                batch.target_id,
+                batch.target_id,
+            )
+            message = f"Generating summary for {target_name}."
             if on_status is not None:
                 on_status(message)
             else:
@@ -36,9 +41,7 @@ class BatchSummarizationService:
             summaries[batch.target_id] = (
                 self.summarization_service.summarize(batch)
             )
-            completed_message = (
-                f"Finished summary for target {batch.target_id}."
-            )
+            completed_message = f"Finished summary for {target_name}."
             if on_status is not None:
                 on_status(completed_message)
             else:

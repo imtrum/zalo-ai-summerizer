@@ -15,8 +15,18 @@ from playwright.sync_api import sync_playwright
 from zalo_diagnostics.config import (
     BROWSER_PROFILE,
     MAX_SCROLL_ROUNDS,
+    MISSING,
+    PROJECT_ROOT,
+    SCROLL_WAIT_MS,
+    SELECTORS,
+    VN_TZ,
 )
 from zalo_diagnostics.dom_inspection import (
+    COLLECT_JS,
+    DATE_HINTS_JS,
+    FIND_SCROLLER_JS,
+    METRICS_JS,
+    SCROLLABLES_JS,
     collect_messages,
     inspect_date_hints,
     inspect_message_html,
@@ -35,7 +45,11 @@ from zalo_diagnostics.reporting import (
     print_message_report,
     print_summary,
 )
-from zalo_diagnostics.scroll_experiments import run_scroll_experiment
+from zalo_diagnostics.scroll_experiments import (
+    run_scroll_experiment,
+    scroll_to_top_once,
+    wheel_over,
+)
 
 
 def run_step(title: str, function, *args):

@@ -12,7 +12,7 @@ python scripts/ui.py
 
 The first app launch creates an empty `data/targets.json` if one does not exist. In the **Targets** tab, choose **Refresh conversation list**, select conversations, and add them as targets. Zalo runs in the background when your saved session is valid; a browser window opens only if you need to sign in.
 
-In the **Summarize** tab, enter a cutoff time in Vietnam time (`YYYY-MM-DD HH:MM`) and start summarization. The **Prompt** tab lets you edit and save the instructions used for future summaries.
+In the **Summarize** tab, choose the cutoff date and time in Vietnam time, then start summarization. The **Prompt** tab lets you edit and save the instructions used for future summaries.
 
 ## Gemini setup
 
@@ -27,3 +27,11 @@ AI_MAX_TOKENS=2000
 ```
 
 The app saves the custom prompt in `data/summarization_prompt.txt`. Both that file and `data/targets.json` are local configuration and are excluded from Git.
+
+## Code layout
+
+- `src/zalo_ai/ui/` contains the desktop app shell, shared theme, and individual tabs.
+- `src/zalo_ai/workflows/` contains browser-session handling, summarization, and target-refresh workflows. The `zalo_ai.workflows` imports remain available.
+- `src/zalo_ai/collector/`, `summarizer/`, `targets/`, and `ai/` contain the existing domain logic.
+- `scripts/zalo_diagnostics/` and `scripts/examples/` hold diagnostic and demonstration code. Existing top-level script commands remain as launchers.
+- `tests/` contains the automated test suite.

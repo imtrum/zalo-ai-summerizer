@@ -267,6 +267,10 @@ def run_summarization(
     summaries = batch_service.summarize_messages(
         all_messages,
         on_status=on_status,
+        target_names={
+            target_id: target["name"]
+            for target_id, target in targets_by_id.items()
+        },
     )
     _notify(on_status, "Summarization finished.")
     return summaries

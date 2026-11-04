@@ -10,7 +10,7 @@ From the project directory, activate your virtual environment and run:
 python scripts/ui.py
 ```
 
-The first app launch creates an empty `data/targets.json` if one does not exist. In the **Targets** tab, choose **Refresh conversation list**, sign in to Zalo in the browser window if needed, select conversations, and add them as targets.
+The first app launch creates an empty `data/targets.json` if one does not exist. In the **Targets** tab, choose **Refresh conversation list**, select conversations, and add them as targets. Zalo runs in the background when your saved session is valid; a browser window opens only if you need to sign in.
 
 In the **Summarize** tab, enter a cutoff time in Vietnam time (`YYYY-MM-DD HH:MM`) and start summarization. The **Prompt** tab lets you edit and save the instructions used for future summaries.
 

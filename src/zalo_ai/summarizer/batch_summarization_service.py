@@ -36,5 +36,12 @@ class BatchSummarizationService:
             summaries[batch.target_id] = (
                 self.summarization_service.summarize(batch)
             )
+            completed_message = (
+                f"Finished summary for target {batch.target_id}."
+            )
+            if on_status is not None:
+                on_status(completed_message)
+            else:
+                logging.getLogger(__name__).info(completed_message)
 
         return summaries

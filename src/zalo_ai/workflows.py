@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from zalo_ai.ai.providers.provider_factory import create_provider
@@ -39,6 +40,64 @@ def _notify(callback: ProgressCallback | None, message: str) -> None:
         logging.getLogger(__name__).info(message)
 
 
+def _launch_zalo_context(playwright, headless: bool):
+    context = playwright.chromium.launch_persistent_context(
+        user_data_dir=str(BROWSER_PROFILE),
+        headless=headless,
+    )
+    page = context.pages[0] if context.pages else context.new_page()
+    page.goto("https://chat.zalo.me/")
+    return context, page
+
+
+def _open_zalo(on_status: ProgressCallback | None, playwright):
+    """Use the saved Zalo session headlessly and show a browser only for login."""
+    _notify(on_status, "Checking the saved Zalo session in the background.")
+    context, page = _launch_zalo_context(playwright, headless=True)
+
+    try:
+        page.locator(CONVERSATION_SELECTOR).first.wait_for(
+            state="visible",
+            timeout=15000,
+        )
+    except PlaywrightTimeoutError:
+        context.close()
+        _notify(
+            on_status,
+            "Zalo needs attention. Opening a browser so you can sign in.",
+        )
+        context, page = _launch_zalo_context(playwright, headless=False)
+
+        try:
+            page.locator(CONVERSATION_SELECTOR).first.wait_for(
+                state="visible",
+                timeout=300000,
+            )
+        except Exception:
+            context.close()
+            raise
+
+        context.close()
+        _notify(
+            on_status,
+            "Sign-in is ready. Closing the browser and continuing "
+            "in the background.",
+        )
+        context, page = _launch_zalo_context(playwright, headless=True)
+
+        try:
+            page.locator(CONVERSATION_SELECTOR).first.wait_for(
+                state="visible",
+                timeout=60000,
+            )
+        except Exception:
+            context.close()
+            raise
+
+    _notify(on_status, "Zalo is ready; continuing without a browser window.")
+    return context, page
+
+
 def run_summarization(
     cutoff: datetime,
     on_status: ProgressCallback | None = None,
@@ -61,28 +120,9 @@ def run_summarization(
     processed_ids: set[str] = set()
 
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=str(BROWSER_PROFILE),
-            headless=False,
-        )
+        context, page = _open_zalo(on_status, playwright)
 
         try:
-            page = (
-                context.pages[0]
-                if context.pages
-                else context.new_page()
-            )
-            page.goto("https://chat.zalo.me/")
-            _notify(
-                on_status,
-                "Zalo opened. Sign in in the browser if prompted; "
-                "waiting for the conversation list.",
-            )
-            page.locator(CONVERSATION_SELECTOR).first.wait_for(
-                state="visible",
-                timeout=300000,
-            )
-
             scroll_handle = page.locator(
                 SCROLL_CONTAINER_SELECTOR
             ).first.evaluate_handle(
@@ -234,26 +274,9 @@ def discover_target_conversations(
 ) -> list[dict[str, str]]:
     """Open Zalo and discover conversations for the target refresh screen."""
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=str(BROWSER_PROFILE),
-            headless=False,
-        )
+        context, page = _open_zalo(on_status, playwright)
 
         try:
-            page = (
-                context.pages[0]
-                if context.pages
-                else context.new_page()
-            )
-            page.goto("https://chat.zalo.me/")
-            _notify(
-                on_status,
-                "Zalo opened. Sign in in the browser if prompted.",
-            )
-            page.locator(CONVERSATION_SELECTOR).first.wait_for(
-                state="visible",
-                timeout=300000,
-            )
             _notify(on_status, "Discovering conversations.")
             return discover_conversations(page)
         finally:

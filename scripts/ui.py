@@ -308,8 +308,8 @@ class ZaloSummarizerUI:
         ttk.Label(
             tab,
             text=(
-                "Zalo opens in a separate browser window. If asked, sign in "
-                "there; this window will show progress."
+                "Zalo runs in the background. A browser window opens "
+                "only if you need to sign in."
             ),
             wraplength=760,
         ).grid(row=4, column=0, sticky="w", pady=(14, 0))

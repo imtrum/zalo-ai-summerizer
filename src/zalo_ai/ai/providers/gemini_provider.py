@@ -188,7 +188,7 @@ class GeminiProvider:
                         continue
 
                     raise GeminiProviderError(
-                        f"Gemini model '{model}' returned no text after "
+                        f"Gemini returned no text from model '{model}' after "
                         f"three attempts. Response metadata: {metadata}"
                     )
 

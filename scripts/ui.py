@@ -259,7 +259,7 @@ class ZaloSummarizerUI:
             text="Cutoff time (Vietnam time)",
         ).grid(row=0, column=0, sticky="w")
 
-        now = datetime.now(VN_TZ)
+        now = datetime.now(VN_TZ).replace(hour=0, minute=0)
         fields = ttk.Frame(tab)
         fields.grid(row=1, column=0, sticky="w", pady=(7, 4))
 

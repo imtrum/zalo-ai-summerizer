@@ -118,6 +118,21 @@ class ZaloSummarizerUI:
             padding=7,
         )
         style.configure(
+            "TSpinbox",
+            fieldbackground=colors["field"],
+            foreground=colors["text"],
+            insertcolor=colors["text"],
+            bordercolor=colors["border"],
+            lightcolor=colors["border"],
+            darkcolor=colors["border"],
+            arrowcolor=colors["muted"],
+            padding=5,
+        )
+        style.map(
+            "TSpinbox",
+            fieldbackground=[("readonly", colors["field"])],
+        )
+        style.configure(
             "TNotebook",
             background=colors["background"],
             bordercolor=colors["border"],
@@ -241,16 +256,42 @@ class ZaloSummarizerUI:
 
         ttk.Label(
             tab,
-            text="Cutoff time (Vietnam time, YYYY-MM-DD HH:MM)",
+            text="Cutoff time (Vietnam time)",
         ).grid(row=0, column=0, sticky="w")
 
-        self.cutoff = tk.StringVar()
-        ttk.Entry(tab, textvariable=self.cutoff, width=28).grid(
-            row=1,
-            column=0,
-            sticky="w",
-            pady=(5, 4),
+        now = datetime.now(VN_TZ)
+        fields = ttk.Frame(tab)
+        fields.grid(row=1, column=0, sticky="w", pady=(7, 4))
+
+        self.cutoff_day = tk.IntVar(value=now.day)
+        self.cutoff_month = tk.IntVar(value=now.month)
+        self.cutoff_year = tk.IntVar(value=now.year)
+        self.cutoff_hour = tk.IntVar(value=now.hour)
+        self.cutoff_minute = tk.IntVar(value=now.minute)
+
+        selectors = (
+            ("Day", self.cutoff_day, 1, 31, 5),
+            ("Month", self.cutoff_month, 1, 12, 5),
+            ("Year", self.cutoff_year, 2000, 2100, 7),
+            ("Hour", self.cutoff_hour, 0, 23, 5),
+            ("Minute", self.cutoff_minute, 0, 59, 5),
         )
+        for column, (label, variable, minimum, maximum, width) in enumerate(
+            selectors
+        ):
+            field = ttk.Frame(fields)
+            field.grid(row=0, column=column, sticky="w", padx=(0, 12))
+            ttk.Label(field, text=label).pack(anchor="w")
+            ttk.Spinbox(
+                field,
+                from_=minimum,
+                to=maximum,
+                textvariable=variable,
+                width=width,
+                wrap=True,
+                justify="center",
+            ).pack(anchor="w", pady=(3, 0))
+
         ttk.Label(
             tab,
             text="Only messages at or after this time will be collected.",
@@ -471,14 +512,17 @@ class ZaloSummarizerUI:
             )
 
     def _start_summarization(self) -> None:
-        cutoff_text = self.cutoff.get().strip()
         try:
-            cutoff = datetime.strptime(
-                cutoff_text,
-                "%Y-%m-%d %H:%M",
-            ).replace(tzinfo=VN_TZ)
-        except ValueError:
-            self.status.set("Enter the cutoff as YYYY-MM-DD HH:MM.")
+            cutoff = datetime(
+                year=self.cutoff_year.get(),
+                month=self.cutoff_month.get(),
+                day=self.cutoff_day.get(),
+                hour=self.cutoff_hour.get(),
+                minute=self.cutoff_minute.get(),
+                tzinfo=VN_TZ,
+            )
+        except (ValueError, tk.TclError):
+            self.status.set("Enter a valid date and time.")
             return
 
         self._start_job(

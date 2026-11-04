@@ -264,7 +264,10 @@ def run_summarization(
     batch_service = BatchSummarizationService(
         summarization_service=summarization_service
     )
-    summaries = batch_service.summarize_messages(all_messages)
+    summaries = batch_service.summarize_messages(
+        all_messages,
+        on_status=on_status,
+    )
     _notify(on_status, "Summarization finished.")
     return summaries
 

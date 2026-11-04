@@ -130,9 +130,39 @@ class GeminiProvider:
             )
 
         if response.text is None:
+            prompt_feedback = getattr(response, "prompt_feedback", None)
+            candidate_details = []
+
+            for candidate in response.candidates or []:
+                candidate_details.append({
+                    "finish_reason": str(
+                        getattr(candidate, "finish_reason", None)
+                    ),
+                    "safety_ratings": [
+                        {
+                            "category": str(
+                                getattr(rating, "category", None)
+                            ),
+                            "probability": str(
+                                getattr(rating, "probability", None)
+                            ),
+                            "blocked": getattr(rating, "blocked", None),
+                        }
+                        for rating in (
+                            getattr(candidate, "safety_ratings", None) or []
+                        )
+                    ],
+                })
+
+            metadata = (
+                f"prompt_feedback={prompt_feedback!r}; "
+                f"candidates={candidate_details!r}"
+            )
+            print(f"[Gemini response metadata] {metadata}")
+
             raise GeminiProviderError(
                 f"Gemini model '{used_model}' returned no text. "
-                "The response may have been blocked or empty."
+                f"Response metadata: {metadata}"
             )
 
         if response.candidates:

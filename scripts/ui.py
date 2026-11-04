@@ -315,6 +315,34 @@ class ZaloSummarizerUI:
             wraplength=760,
         ).grid(row=4, column=0, sticky="w", pady=(14, 0))
 
+        results_frame = ttk.LabelFrame(
+            tab,
+            text="Summarization results",
+            padding=8,
+        )
+        results_frame.grid(
+            row=5,
+            column=0,
+            sticky="nsew",
+            pady=(14, 0),
+        )
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(5, weight=1)
+
+        self.results = ScrolledText(
+            results_frame,
+            height=12,
+            wrap="word",
+            font=("Segoe UI", 10),
+        )
+        self.results.pack(fill="both", expand=True)
+        self._style_text_widget(self.results)
+        self.results.insert(
+            "1.0",
+            "Summaries will appear here after a run completes.",
+        )
+        self.results.configure(state="disabled")
+
     def _build_targets_tab(self, notebook: ttk.Notebook) -> None:
         tab = ttk.Frame(notebook, padding=14)
         notebook.add(tab, text="Targets")
@@ -471,6 +499,10 @@ class ZaloSummarizerUI:
                 message = f"{type(exc).__name__}: {exc}"
                 self.status.set(f"{kind.title()} failed")
                 self._log(message)
+                if kind == "summarize":
+                    self._set_results_text(
+                        "Summarization failed.\n\n" + message
+                    )
             elif event == "result":
                 kind, result = payload
                 self.busy = False
@@ -491,12 +523,18 @@ class ZaloSummarizerUI:
             except Exception:
                 names = {}
 
-            for target_id, summary in summaries.items():
-                name = names.get(target_id, target_id)
-                self._log(f"Summary for {name}:")
-                self._log(summary)
-                self._log("")
+            result_text = "\n\n".join(
+                f"Summary for {names.get(target_id, target_id)}\n"
+                f"{summary}"
+                for target_id, summary in summaries.items()
+            )
+            self._set_results_text(
+                result_text or "The workflow returned no summaries."
+            )
             self.status.set("Summarization complete")
+            self._log(
+                f"Displayed summaries for {len(summaries)} conversation(s)."
+            )
             return
 
         if kind == "discover":
@@ -512,6 +550,12 @@ class ZaloSummarizerUI:
                 "conversations."
             )
 
+    def _set_results_text(self, text: str) -> None:
+        self.results.configure(state="normal")
+        self.results.delete("1.0", "end")
+        self.results.insert("1.0", text)
+        self.results.configure(state="disabled")
+
     def _start_summarization(self) -> None:
         try:
             cutoff = datetime(
@@ -526,6 +570,10 @@ class ZaloSummarizerUI:
             self.status.set("Enter a valid date and time.")
             return
 
+        self._set_results_text(
+            "Summarization is running. Results will appear here when "
+            "processing finishes."
+        )
         self._start_job(
             "summarize",
             "Starting summarization",

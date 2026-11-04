@@ -35,6 +35,7 @@ class ZaloSummarizerUI:
         self.root.title("Zalo AI Summarizer")
         self.root.geometry("960x760")
         self.root.minsize(820, 640)
+        self._configure_dark_theme()
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False
@@ -45,6 +46,150 @@ class ZaloSummarizerUI:
         self._build_ui()
         self._refresh_saved_targets()
         self.root.after(100, self._drain_events)
+
+    def _configure_dark_theme(self) -> None:
+        """Apply a consistent dark palette to ttk and classic Tk widgets."""
+        colors = {
+            "background": "#171923",
+            "surface": "#222633",
+            "surface_hover": "#303747",
+            "field": "#11141d",
+            "text": "#e7eaf0",
+            "muted": "#a7afbf",
+            "accent": "#6c8cff",
+            "border": "#3a4152",
+            "selection": "#405b9b",
+        }
+
+        self.root.configure(background=colors["background"])
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+
+        style.configure(
+            ".",
+            background=colors["background"],
+            foreground=colors["text"],
+            font=("Segoe UI", 10),
+        )
+        style.configure("TFrame", background=colors["background"])
+        style.configure(
+            "TLabel",
+            background=colors["background"],
+            foreground=colors["text"],
+        )
+        style.configure(
+            "TLabelframe",
+            background=colors["background"],
+            foreground=colors["text"],
+            bordercolor=colors["border"],
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background=colors["background"],
+            foreground=colors["muted"],
+        )
+        style.configure(
+            "TButton",
+            background=colors["surface"],
+            foreground=colors["text"],
+            bordercolor=colors["border"],
+            padding=(12, 7),
+        )
+        style.map(
+            "TButton",
+            background=[
+                ("disabled", colors["surface"]),
+                ("pressed", colors["selection"]),
+                ("active", colors["surface_hover"]),
+            ],
+            foreground=[
+                ("disabled", colors["muted"]),
+                ("!disabled", colors["text"]),
+            ],
+        )
+        style.configure(
+            "TEntry",
+            fieldbackground=colors["field"],
+            foreground=colors["text"],
+            insertcolor=colors["text"],
+            bordercolor=colors["border"],
+            lightcolor=colors["border"],
+            darkcolor=colors["border"],
+            padding=7,
+        )
+        style.configure(
+            "TNotebook",
+            background=colors["background"],
+            bordercolor=colors["border"],
+            tabmargins=(0, 0, 0, 0),
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=colors["surface"],
+            foreground=colors["muted"],
+            padding=(16, 9),
+            bordercolor=colors["border"],
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[
+                ("selected", colors["background"]),
+                ("active", colors["surface_hover"]),
+            ],
+            foreground=[
+                ("selected", colors["text"]),
+                ("active", colors["text"]),
+            ],
+        )
+        style.configure(
+            "Treeview",
+            background=colors["field"],
+            fieldbackground=colors["field"],
+            foreground=colors["text"],
+            bordercolor=colors["border"],
+            rowheight=28,
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", colors["selection"])],
+            foreground=[("selected", "#ffffff")],
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=colors["surface"],
+            foreground=colors["text"],
+            bordercolor=colors["border"],
+            padding=(8, 6),
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", colors["surface_hover"])],
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=colors["surface"],
+            troughcolor=colors["background"],
+            bordercolor=colors["background"],
+            arrowcolor=colors["muted"],
+        )
+
+        self._dark_colors = colors
+
+    def _style_text_widget(self, widget: tk.Text | tk.Listbox) -> None:
+        """Apply the dark palette to classic Tk text and list widgets."""
+        colors = self._dark_colors
+        widget.configure(
+            background=colors["field"],
+            foreground=colors["text"],
+            insertbackground=colors["text"],
+            selectbackground=colors["selection"],
+            selectforeground="#ffffff",
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
+            highlightthickness=1,
+            relief="flat",
+            borderwidth=0,
+        )
 
     def _build_ui(self) -> None:
         container = ttk.Frame(self.root, padding=14)
@@ -87,6 +232,7 @@ class ZaloSummarizerUI:
             font=("Consolas", 9),
         )
         self.activity.pack(fill="both", expand=False)
+        self._style_text_widget(self.activity)
         self.activity.configure(state="disabled")
 
     def _build_summarize_tab(self, notebook: ttk.Notebook) -> None:
@@ -153,6 +299,7 @@ class ZaloSummarizerUI:
             exportselection=False,
         )
         self.discovered_list.pack(fill="both", expand=True)
+        self._style_text_widget(self.discovered_list)
 
         self.add_targets_button = ttk.Button(
             discovery,
@@ -210,6 +357,7 @@ class ZaloSummarizerUI:
             font=("Segoe UI", 10),
         )
         self.prompt_editor.pack(fill="both", expand=True)
+        self._style_text_widget(self.prompt_editor)
         self.prompt_editor.insert("1.0", load_prompt())
 
         controls = ttk.Frame(tab)

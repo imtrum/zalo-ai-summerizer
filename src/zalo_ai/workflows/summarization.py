@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event
 
 from playwright.sync_api import sync_playwright
 
 from zalo_ai.ai.providers.provider_factory import create_provider
+from zalo_ai.cancellation import check_cancellation
 from zalo_ai.collector.zalo_message_collector import ZaloMessageCollector
 from zalo_ai.models.message import Message
 from zalo_ai.summarizer.batch_summarization_service import (
@@ -15,7 +17,12 @@ from zalo_ai.targets.zalo_discovery import (
     get_visible_conversation_ids,
     open_visible_conversation,
 )
-from .browser import ProgressCallback, notify, open_zalo
+from .browser import (
+    ProgressCallback,
+    notify,
+    open_zalo,
+    wait_for_locator,
+)
 
 
 VN_TZ = timezone(timedelta(hours=7))
@@ -24,8 +31,10 @@ VN_TZ = timezone(timedelta(hours=7))
 def run_summarization(
     cutoff: datetime,
     on_status: ProgressCallback | None = None,
+    cancel_event: Event | None = None,
 ) -> dict[str, str]:
     """Collect enabled Zalo chats and return summaries keyed by target ID."""
+    check_cancellation(cancel_event)
     enabled_targets = get_enabled_targets()
     targets_by_id = {
         target["id"]: target for target in enabled_targets
@@ -43,7 +52,11 @@ def run_summarization(
     processed_ids: set[str] = set()
 
     with sync_playwright() as playwright:
-        context, page = _open_zalo(on_status, playwright)
+        context, page = open_zalo(
+            on_status,
+            playwright,
+            cancel_event=cancel_event,
+        )
 
         try:
             scroll_handle = page.locator(
@@ -80,6 +93,7 @@ def run_summarization(
                     checked_at_position: set[str] = set()
 
                     while True:
+                        check_cancellation(cancel_event)
                         visible_ids = get_visible_conversation_ids(
                             scroll_container
                         )
@@ -104,6 +118,7 @@ def run_summarization(
                             f"Opening {target_name} and collecting messages.",
                         )
 
+                        check_cancellation(cancel_event)
                         if not open_visible_conversation(page, target_id):
                             notify(
                                 on_status,
@@ -112,19 +127,23 @@ def run_summarization(
                             )
                             continue
 
-                        page.locator(
-                            '[data-component="message-content-view"]'
-                        ).first.wait_for(
-                            state="visible",
-                            timeout=15000,
+                        wait_for_locator(
+                            page.locator(
+                                '[data-component="message-content-view"]'
+                            ).first,
+                            timeout_ms=15000,
+                            cancel_event=cancel_event,
                         )
+                        check_cancellation(cancel_event)
 
                         collector = ZaloMessageCollector(
                             page=page,
                             target_id=target_id,
                             cutoff=cutoff,
+                            cancel_event=cancel_event,
                         )
                         messages = collector.collect_messages()
+                        check_cancellation(cancel_event)
                         all_messages.extend(messages)
                         processed_ids.add(target_id)
                         notify(
@@ -140,6 +159,7 @@ def run_summarization(
                 )
                 unchanged_rounds = 0
                 while unchanged_rounds < 3:
+                    check_cancellation(cancel_event)
                     process_visible_targets()
 
                     old_top = scroll_container.evaluate(
@@ -153,6 +173,7 @@ def run_summarization(
                         }"""
                     )
                     page.wait_for_timeout(500)
+                    check_cancellation(cancel_event)
 
                     new_top = scroll_container.evaluate(
                         "(element) => element.scrollTop"
@@ -163,6 +184,7 @@ def run_summarization(
                         unchanged_rounds = 0
 
                 for target_id, target in targets_by_id.items():
+                    check_cancellation(cancel_event)
                     if target_id not in processed_ids:
                         notify(
                             on_status,
@@ -176,6 +198,7 @@ def run_summarization(
         finally:
             context.close()
 
+    check_cancellation(cancel_event)
     if not all_messages:
         raise ValueError(
             "No messages were collected after the selected cutoff."
@@ -194,6 +217,8 @@ def run_summarization(
             target_id: target["name"]
             for target_id, target in targets_by_id.items()
         },
+        cancel_event=cancel_event,
     )
+    check_cancellation(cancel_event)
     notify(on_status, "Summarization finished.")
     return summaries

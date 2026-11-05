@@ -4,13 +4,13 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
-from .theme import style_text_widget
+from .theme import Theme
 
 
 VN_TZ = timezone(timedelta(hours=7))
 
 
-class SummarizeTab(ttk.Frame):
+class SummarizeTab(Theme):
     """Cutoff controls and result display for the summarization workflow."""
 
     def __init__(
@@ -20,8 +20,7 @@ class SummarizeTab(ttk.Frame):
         on_start: Callable[[datetime], None],
         on_status: Callable[[str], None],
     ) -> None:
-        super().__init__(parent, padding=14)
-        self.colors = colors
+        super().__init__(parent, colors=colors, padding=14)
         self.on_start = on_start
         self.on_status = on_status
         self.action_buttons: list[ttk.Button] = []
@@ -109,7 +108,7 @@ class SummarizeTab(ttk.Frame):
             font=("Segoe UI", 10),
         )
         self.results.pack(fill="both", expand=True)
-        style_text_widget(self.results, self.colors)
+        self.style_text_widget(self.results)
         self.set_results_text(
             "Summaries will appear here after a run completes."
         )

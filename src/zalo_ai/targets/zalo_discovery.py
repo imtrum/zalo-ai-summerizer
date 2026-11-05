@@ -52,7 +52,13 @@ def discover_conversations(
 ) -> list[dict[str, str]]:
     """Discover conversations by scrolling to the top, then the bottom."""
     check_cancellation(cancel_event)
-    _wait_for_conversation_list(page, cancel_event)
+    if cancel_event is None:
+        page.locator(CONVERSATION_SELECTOR).first.wait_for(
+            state="visible",
+            timeout=15000,
+        )
+    else:
+        _wait_for_conversation_list(page, cancel_event)
     check_cancellation(cancel_event)
 
     scroll_handle = page.locator(

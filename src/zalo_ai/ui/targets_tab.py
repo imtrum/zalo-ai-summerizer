@@ -8,10 +8,10 @@ from zalo_ai.targets.json_store import (
     set_target_enabled,
 )
 from zalo_ai.workflows import save_discovered_targets
-from .theme import style_text_widget
+from .theme import Theme
 
 
-class TargetsTab(ttk.Frame):
+class TargetsTab(Theme):
     """Discover conversations and manage saved targets."""
 
     def __init__(
@@ -22,8 +22,7 @@ class TargetsTab(ttk.Frame):
         on_status: Callable[[str], None],
         log: Callable[[str], None],
     ) -> None:
-        super().__init__(parent, padding=14)
-        self.colors = colors
+        super().__init__(parent, colors=colors, padding=14)
         self.on_refresh = on_refresh
         self.on_status = on_status
         self.log = log
@@ -55,7 +54,7 @@ class TargetsTab(ttk.Frame):
             exportselection=False,
         )
         self.discovered_list.pack(fill="both", expand=True)
-        style_text_widget(self.discovered_list, self.colors)
+        self.style_text_widget(self.discovered_list)
 
         self.add_targets_button = ttk.Button(
             discovery,

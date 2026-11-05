@@ -71,21 +71,12 @@ class TargetsTab(Theme):
         )
         saved.pack(fill="both", expand=True, pady=(12, 0))
 
-        self.target_tree = ttk.Treeview(
-            saved,
-            columns=("name", "enabled"),
-            show="headings",
-            selectmode="extended",
-            height=7,
-        )
-        self.target_tree.heading("name", text="Conversation")
-        self.target_tree.heading("enabled", text="Enabled")
-        self.target_tree.column("name", width=540, anchor="w")
-        self.target_tree.column("enabled", width=100, anchor="center")
-        self.target_tree.pack(fill="both", expand=True)
-
         controls = ttk.Frame(saved)
-        controls.pack(anchor="w", pady=(8, 0))
+        controls.pack(fill="x", pady=(0, 8))
+        ttk.Label(
+            controls,
+            text="Select rows, then:",
+        ).pack(side="left", padx=(0, 8))
 
         self.enable_targets_button = ttk.Button(
             controls,
@@ -102,6 +93,19 @@ class TargetsTab(Theme):
         )
         self.disable_targets_button.pack(side="left", padx=(8, 0))
         self.action_buttons.append(self.disable_targets_button)
+
+        self.target_tree = ttk.Treeview(
+            saved,
+            columns=("name", "enabled"),
+            show="headings",
+            selectmode="extended",
+            height=7,
+        )
+        self.target_tree.heading("name", text="Conversation")
+        self.target_tree.heading("enabled", text="Enabled")
+        self.target_tree.column("name", width=540, anchor="w")
+        self.target_tree.column("enabled", width=100, anchor="center")
+        self.target_tree.pack(fill="both", expand=True)
 
     def set_discoveries(
         self,

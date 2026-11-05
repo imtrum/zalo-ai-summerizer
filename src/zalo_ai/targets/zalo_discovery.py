@@ -1,6 +1,11 @@
 from threading import Event
+from time import monotonic
 
-from playwright.sync_api import ElementHandle, Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import (
+    ElementHandle,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from zalo_ai.cancellation import check_cancellation
 
@@ -12,6 +17,34 @@ SCROLL_CONTAINER_SELECTOR = (
 )
 
 
+def _wait_for_conversation_list(
+    page: Page,
+    cancel_event: Event | None,
+    timeout_ms: int = 15000,
+) -> None:
+    """Wait in short intervals to make list discovery responsive to cancel."""
+    locator = page.locator(CONVERSATION_SELECTOR).first
+    deadline = monotonic() + timeout_ms / 1000
+
+    while True:
+        check_cancellation(cancel_event)
+        remaining_ms = int((deadline - monotonic()) * 1000)
+        if remaining_ms <= 0:
+            raise PlaywrightTimeoutError(
+                f"Timed out after {timeout_ms} ms waiting for conversations."
+            )
+
+        try:
+            locator.wait_for(
+                state="visible",
+                timeout=min(750, remaining_ms),
+            )
+            return
+        except PlaywrightTimeoutError:
+            if monotonic() >= deadline:
+                raise
+
+
 def discover_conversations(
     page: Page,
     max_unchanged_rounds: int = 3,
@@ -19,10 +52,7 @@ def discover_conversations(
 ) -> list[dict[str, str]]:
     """Discover conversations by scrolling to the top, then the bottom."""
     check_cancellation(cancel_event)
-    page.locator(CONVERSATION_SELECTOR).first.wait_for(
-        state="visible",
-        timeout=15000,
-    )
+    _wait_for_conversation_list(page, cancel_event)
     check_cancellation(cancel_event)
 
     scroll_handle = page.locator(

@@ -52,11 +52,14 @@ def run_summarization(
     processed_ids: set[str] = set()
 
     with sync_playwright() as playwright:
-        context, page = open_zalo(
-            on_status,
-            playwright,
-            cancel_event=cancel_event,
-        )
+        if cancel_event is None:
+            context, page = open_zalo(on_status, playwright)
+        else:
+            context, page = open_zalo(
+                on_status,
+                playwright,
+                cancel_event=cancel_event,
+            )
 
         try:
             scroll_handle = page.locator(
@@ -136,12 +139,19 @@ def run_summarization(
                         )
                         check_cancellation(cancel_event)
 
-                        collector = ZaloMessageCollector(
-                            page=page,
-                            target_id=target_id,
-                            cutoff=cutoff,
-                            cancel_event=cancel_event,
-                        )
+                        if cancel_event is None:
+                            collector = ZaloMessageCollector(
+                                page=page,
+                                target_id=target_id,
+                                cutoff=cutoff,
+                            )
+                        else:
+                            collector = ZaloMessageCollector(
+                                page=page,
+                                target_id=target_id,
+                                cutoff=cutoff,
+                                cancel_event=cancel_event,
+                            )
                         messages = collector.collect_messages()
                         check_cancellation(cancel_event)
                         all_messages.extend(messages)
@@ -210,15 +220,23 @@ def run_summarization(
     batch_service = BatchSummarizationService(
         summarization_service=summarization_service
     )
-    summaries = batch_service.summarize_messages(
-        all_messages,
-        on_status=on_status,
-        target_names={
-            target_id: target["name"]
-            for target_id, target in targets_by_id.items()
-        },
-        cancel_event=cancel_event,
-    )
+    target_names = {
+        target_id: target["name"]
+        for target_id, target in targets_by_id.items()
+    }
+    if cancel_event is None:
+        summaries = batch_service.summarize_messages(
+            all_messages,
+            on_status=on_status,
+            target_names=target_names,
+        )
+    else:
+        summaries = batch_service.summarize_messages(
+            all_messages,
+            on_status=on_status,
+            target_names=target_names,
+            cancel_event=cancel_event,
+        )
     check_cancellation(cancel_event)
     notify(on_status, "Summarization finished.")
     return summaries

@@ -8,10 +8,10 @@ from zalo_ai.summarizer.prompt_store import (
     load_prompt,
     save_prompt,
 )
-from .theme import style_text_widget
+from .theme import Theme
 
 
-class PromptTab(ttk.Frame):
+class PromptTab(Theme):
     """Edit and save the prompt used for future summaries."""
 
     def __init__(
@@ -21,8 +21,7 @@ class PromptTab(ttk.Frame):
         on_status: Callable[[str], None],
         log: Callable[[str], None],
     ) -> None:
-        super().__init__(parent, padding=14)
-        self.colors = colors
+        super().__init__(parent, colors=colors, padding=14)
         self.on_status = on_status
         self.log = log
         self.action_buttons: list[ttk.Button] = []
@@ -45,7 +44,7 @@ class PromptTab(ttk.Frame):
             font=("Segoe UI", 10),
         )
         self.prompt_editor.pack(fill="both", expand=True)
-        style_text_widget(self.prompt_editor, self.colors)
+        self.style_text_widget(self.prompt_editor)
         self.prompt_editor.insert("1.0", load_prompt())
 
         controls = ttk.Frame(self)

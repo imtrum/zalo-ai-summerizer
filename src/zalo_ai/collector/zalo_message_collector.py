@@ -1,9 +1,10 @@
-
 import unicodedata
 from datetime import datetime, timedelta, timezone
+from threading import Event
 
 from playwright.sync_api import Page
 
+from zalo_ai.cancellation import check_cancellation
 from zalo_ai.collector.message_collector import MessageCollector
 from zalo_ai.collector.zalo_message_parser import (
     COLLECT_JS,
@@ -28,6 +29,7 @@ class ZaloMessageCollector(MessageCollector):
         page: Page,
         target_id: str,
         cutoff: datetime,
+        cancel_event: Event | None = None,
     ) -> None:
         if not target_id.strip():
             raise ValueError("target_id must not be empty")
@@ -40,6 +42,7 @@ class ZaloMessageCollector(MessageCollector):
         self.page = page
         self.target_id = target_id
         self.cutoff = cutoff
+        self.cancel_event = cancel_event
         self.scroll_helper = ZaloScrollHelper(page)
 
     @staticmethod
@@ -59,11 +62,13 @@ class ZaloMessageCollector(MessageCollector):
         collected: dict[tuple, Message],
     ) -> bool:
         """Collect one rendered snapshot. Return True if cutoff is reached."""
+        check_cancellation(self.cancel_event)
         records = self.page.evaluate(COLLECT_JS)
         last_sender: str | None = None
         cutoff_reached = False
 
         for record in records:
+            check_cancellation(self.cancel_event)
             sender = clean_text(record.get("sender"))
 
             if sender:
@@ -107,6 +112,7 @@ class ZaloMessageCollector(MessageCollector):
 
     def collect_messages(self) -> list[Message]:
         """Collect messages at or after cutoff, loading older history as needed."""
+        check_cancellation(self.cancel_event)
         collected: dict[tuple, Message] = {}
 
         scroller = self.scroll_helper.find_scroller()
@@ -121,6 +127,7 @@ class ZaloMessageCollector(MessageCollector):
 
         try:
             for _ in range(MAX_SCROLL_ROUNDS):
+                check_cancellation(self.cancel_event)
                 if self._collect_snapshot(collected):
                     break
 
@@ -134,6 +141,7 @@ class ZaloMessageCollector(MessageCollector):
 
                 self.scroll_helper.scroll_up(scroller)
                 self.page.wait_for_timeout(SCROLL_WAIT_MS)
+                check_cancellation(self.cancel_event)
 
                 if self._collect_snapshot(collected):
                     break
@@ -153,6 +161,7 @@ class ZaloMessageCollector(MessageCollector):
                 ):
                     self.scroll_helper.scroll_up_with_wheel(scroller)
                     self.page.wait_for_timeout(SCROLL_WAIT_MS)
+                    check_cancellation(self.cancel_event)
 
                     if self._collect_snapshot(collected):
                         break
@@ -173,6 +182,7 @@ class ZaloMessageCollector(MessageCollector):
         finally:
             scroller.dispose()
 
+        check_cancellation(self.cancel_event)
         return sorted(
             collected.values(),
             key=lambda message: message.timestamp,

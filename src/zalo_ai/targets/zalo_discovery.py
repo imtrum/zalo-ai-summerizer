@@ -1,4 +1,13 @@
-from playwright.sync_api import ElementHandle, Page, TimeoutError as PlaywrightTimeoutError
+from threading import Event
+from time import monotonic
+
+from playwright.sync_api import (
+    ElementHandle,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
+
+from zalo_ai.cancellation import check_cancellation
 
 
 CONVERSATION_SELECTOR = ".msg-item"
@@ -8,15 +17,49 @@ SCROLL_CONTAINER_SELECTOR = (
 )
 
 
+def _wait_for_conversation_list(
+    page: Page,
+    cancel_event: Event | None,
+    timeout_ms: int = 15000,
+) -> None:
+    """Wait in short intervals to make list discovery responsive to cancel."""
+    locator = page.locator(CONVERSATION_SELECTOR).first
+    deadline = monotonic() + timeout_ms / 1000
+
+    while True:
+        check_cancellation(cancel_event)
+        remaining_ms = int((deadline - monotonic()) * 1000)
+        if remaining_ms <= 0:
+            raise PlaywrightTimeoutError(
+                f"Timed out after {timeout_ms} ms waiting for conversations."
+            )
+
+        try:
+            locator.wait_for(
+                state="visible",
+                timeout=min(750, remaining_ms),
+            )
+            return
+        except PlaywrightTimeoutError:
+            if monotonic() >= deadline:
+                raise
+
+
 def discover_conversations(
     page: Page,
     max_unchanged_rounds: int = 3,
+    cancel_event: Event | None = None,
 ) -> list[dict[str, str]]:
     """Discover conversations by scrolling to the top, then the bottom."""
-    page.locator(CONVERSATION_SELECTOR).first.wait_for(
-        state="visible",
-        timeout=15000,
-    )
+    check_cancellation(cancel_event)
+    if cancel_event is None:
+        page.locator(CONVERSATION_SELECTOR).first.wait_for(
+            state="visible",
+            timeout=15000,
+        )
+    else:
+        _wait_for_conversation_list(page, cancel_event)
+    check_cancellation(cancel_event)
 
     scroll_handle = page.locator(
         SCROLL_CONTAINER_SELECTOR
@@ -43,6 +86,7 @@ def discover_conversations(
     conversations: dict[str, dict[str, str]] = {}
 
     def collect_visible() -> None:
+        check_cancellation(cancel_event)
         visible = page.locator(
             CONVERSATION_SELECTOR
         ).evaluate_all(
@@ -55,6 +99,7 @@ def discover_conversations(
         )
 
         for item in visible:
+            check_cancellation(cancel_event)
             name = item["name"]
             target_id = item["id"]
             if name and target_id:
@@ -71,6 +116,7 @@ def discover_conversations(
         # Phase 1: Scroll upward until reaching the top.
         unchanged_rounds = 0
         while unchanged_rounds < max_unchanged_rounds:
+            check_cancellation(cancel_event)
             collect_visible()
 
             current_top = scroll_container.evaluate(
@@ -87,6 +133,7 @@ def discover_conversations(
                 }"""
             )
             page.wait_for_timeout(800)
+            check_cancellation(cancel_event)
 
             new_top = scroll_container.evaluate(
                 "(element) => element.scrollTop"
@@ -99,6 +146,7 @@ def discover_conversations(
         # Phase 2: Scroll downward until reaching the bottom.
         unchanged_rounds = 0
         while unchanged_rounds < max_unchanged_rounds:
+            check_cancellation(cancel_event)
             collect_visible()
 
             position = scroll_container.evaluate(
@@ -118,6 +166,7 @@ def discover_conversations(
                 }"""
             )
             page.wait_for_timeout(800)
+            check_cancellation(cancel_event)
 
             new_top = scroll_container.evaluate(
                 "(element) => element.scrollTop"
@@ -128,6 +177,7 @@ def discover_conversations(
                 unchanged_rounds = 0
 
         # Capture the final visible rows at the bottom.
+        check_cancellation(cancel_event)
         collect_visible()
 
     finally:
@@ -178,6 +228,3 @@ def open_visible_conversation(
 
     locator.click()
     return True
-
-
-

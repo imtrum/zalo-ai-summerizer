@@ -35,6 +35,10 @@ def wait_for_locator(
     cancel_event: Event | None = None,
 ) -> None:
     """Wait in short intervals so a running workflow can be cancelled."""
+    if cancel_event is None:
+        locator.wait_for(state="visible", timeout=timeout_ms)
+        return
+
     deadline = monotonic() + timeout_ms / 1000
 
     while True:

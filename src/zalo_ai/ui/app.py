@@ -3,10 +3,12 @@ import queue
 import threading
 from collections.abc import Callable
 from datetime import datetime
+from threading import Event
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
+from zalo_ai.cancellation import CancellationRequested
 from zalo_ai.config.logging_config import setup_logging
 from zalo_ai.targets.json_store import ensure_targets_file, load_targets
 from zalo_ai.workflows import (
@@ -19,7 +21,7 @@ from .targets_tab import TargetsTab
 from .theme import Theme, style_text_widget
 
 
-Job = Callable[[Callable[[str], None]], object]
+Job = Callable[[Callable[[str], None], Event], object]
 
 
 class ZaloSummarizerUI:
@@ -34,6 +36,7 @@ class ZaloSummarizerUI:
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False
+        self.cancel_event: Event | None = None
         self.action_buttons: list[ttk.Button] = []
 
         ensure_targets_file()
@@ -58,13 +61,23 @@ class ZaloSummarizerUI:
             ),
         ).pack(anchor="w", pady=(2, 10))
 
+        status_row = ttk.Frame(container)
+        status_row.pack(fill="x", pady=(0, 10))
         self.status = tk.StringVar(value="Ready")
         ttk.Label(
-            container,
+            status_row,
             textvariable=self.status,
             relief="groove",
             padding=(8, 5),
-        ).pack(fill="x", pady=(0, 10))
+        ).pack(side="left", fill="x", expand=True)
+
+        self.cancel_button = ttk.Button(
+            status_row,
+            text="Cancel",
+            command=self._cancel_active_job,
+            state="disabled",
+        )
+        self.cancel_button.pack(side="left", padx=(8, 0))
 
         notebook = ttk.Notebook(container)
         notebook.pack(fill="both", expand=True)
@@ -120,21 +133,39 @@ class ZaloSummarizerUI:
         self.activity.see("end")
         self.activity.configure(state="disabled")
 
+    def _cancel_active_job(self) -> None:
+        if not self.busy or self.cancel_event is None:
+            return
+
+        if not self.cancel_event.is_set():
+            self.cancel_event.set()
+            self.cancel_button.configure(state="disabled")
+            self.status.set(
+                "Cancellation requested; waiting for the current step."
+            )
+            self._log("Cancellation requested.")
+
     def _start_job(self, kind: str, label: str, job: Job) -> None:
         if self.busy:
             return
 
         self.busy = True
+        cancel_event = threading.Event()
+        self.cancel_event = cancel_event
         self.status.set(label)
+        self.cancel_button.configure(state="normal")
         for button in self.action_buttons:
             button.configure(state="disabled")
 
         def report(message: str) -> None:
-            self.events.put(("status", message))
+            if not cancel_event.is_set():
+                self.events.put(("status", message))
 
         def worker() -> None:
             try:
-                result = job(report)
+                result = job(report, cancel_event)
+            except CancellationRequested as exc:
+                self.events.put(("cancelled", (kind, exc)))
             except Exception as exc:
                 logging.getLogger(__name__).exception(
                     "Background UI action failed."
@@ -145,6 +176,13 @@ class ZaloSummarizerUI:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _finish_job_controls(self) -> None:
+        self.busy = False
+        self.cancel_event = None
+        self.cancel_button.configure(state="disabled")
+        for button in self.action_buttons:
+            button.configure(state="normal")
+
     def _drain_events(self) -> None:
         while True:
             try:
@@ -153,14 +191,13 @@ class ZaloSummarizerUI:
                 break
 
             if event == "status":
-                message = str(payload)
-                self.status.set(message)
-                self._log(message)
+                if self.cancel_event is None or not self.cancel_event.is_set():
+                    message = str(payload)
+                    self.status.set(message)
+                    self._log(message)
             elif event == "error":
                 kind, exc = payload
-                self.busy = False
-                for button in self.action_buttons:
-                    button.configure(state="normal")
+                self._finish_job_controls()
                 message = f"{type(exc).__name__}: {exc}"
                 self.status.set(f"{kind.title()} failed")
                 self._log(message)
@@ -168,11 +205,23 @@ class ZaloSummarizerUI:
                     self.summarize_tab.set_results_text(
                         "Summarization failed.\n\n" + message
                     )
+            elif event == "cancelled":
+                kind, _exc = payload
+                self._finish_job_controls()
+                label = (
+                    "Summarization cancelled"
+                    if kind == "summarize"
+                    else "Target refresh cancelled"
+                )
+                self.status.set(label)
+                self._log(label + ".")
+                if kind == "summarize":
+                    self.summarize_tab.set_results_text(
+                        "Summarization was cancelled before it finished."
+                    )
             elif event == "result":
                 kind, result = payload
-                self.busy = False
-                for button in self.action_buttons:
-                    button.configure(state="normal")
+                self._finish_job_controls()
                 self._show_result(kind, result)
 
         self.root.after(100, self._drain_events)
@@ -202,9 +251,10 @@ class ZaloSummarizerUI:
         self._start_job(
             "summarize",
             "Starting summarization",
-            lambda report: run_summarization(
+            lambda report, cancel_event: run_summarization(
                 cutoff,
                 on_status=report,
+                cancel_event=cancel_event,
             ),
         )
 
@@ -212,8 +262,9 @@ class ZaloSummarizerUI:
         self._start_job(
             "discover",
             "Opening Zalo to refresh targets",
-            lambda report: discover_target_conversations(
+            lambda report, cancel_event: discover_target_conversations(
                 on_status=report,
+                cancel_event=cancel_event,
             ),
         )
 

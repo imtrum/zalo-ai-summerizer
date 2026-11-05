@@ -43,7 +43,7 @@ def run_summarization(
     processed_ids: set[str] = set()
 
     with sync_playwright() as playwright:
-        context, page = _open_zalo(on_status, playwright)
+        context, page = open_zalo(on_status, playwright)
 
         try:
             scroll_handle = page.locator(

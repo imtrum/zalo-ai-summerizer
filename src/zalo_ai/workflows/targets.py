@@ -10,7 +10,7 @@ def discover_target_conversations(
 ) -> list[dict[str, str]]:
     """Open Zalo and discover conversations for the target refresh screen."""
     with sync_playwright() as playwright:
-        context, page = _open_zalo(on_status, playwright)
+        context, page = open_zalo(on_status, playwright)
 
         try:
             notify(on_status, "Discovering conversations.")

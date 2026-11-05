@@ -84,13 +84,24 @@ class TargetsTab(Theme):
         self.target_tree.column("enabled", width=100, anchor="center")
         self.target_tree.pack(fill="both", expand=True)
 
-        self.toggle_targets_button = ttk.Button(
-            saved,
-            text="Enable / disable selected",
-            command=self._toggle_selected_targets,
+        controls = ttk.Frame(saved)
+        controls.pack(anchor="w", pady=(8, 0))
+
+        self.enable_targets_button = ttk.Button(
+            controls,
+            text="Enable selected",
+            command=self._enable_selected_targets,
         )
-        self.toggle_targets_button.pack(anchor="w", pady=(8, 0))
-        self.action_buttons.append(self.toggle_targets_button)
+        self.enable_targets_button.pack(side="left")
+        self.action_buttons.append(self.enable_targets_button)
+
+        self.disable_targets_button = ttk.Button(
+            controls,
+            text="Disable selected",
+            command=self._disable_selected_targets,
+        )
+        self.disable_targets_button.pack(side="left", padx=(8, 0))
+        self.action_buttons.append(self.disable_targets_button)
 
     def set_discoveries(
         self,
@@ -153,7 +164,13 @@ class TargetsTab(Theme):
                 ),
             )
 
-    def _toggle_selected_targets(self) -> None:
+    def _enable_selected_targets(self) -> None:
+        self._set_selected_targets_enabled(True)
+
+    def _disable_selected_targets(self) -> None:
+        self._set_selected_targets_enabled(False)
+
+    def _set_selected_targets_enabled(self, enabled: bool) -> None:
         selected = self.target_tree.selection()
         if not selected:
             self.on_status("Select one or more saved targets first.")
@@ -161,11 +178,11 @@ class TargetsTab(Theme):
 
         try:
             for target_id in selected:
-                enabled = self.target_tree.set(
-                    target_id,
-                    "enabled",
-                ) == "Yes"
-                set_target_enabled(target_id, not enabled)
+                current_enabled = (
+                    self.target_tree.set(target_id, "enabled") == "Yes"
+                )
+                if current_enabled != enabled:
+                    set_target_enabled(target_id, enabled)
             self.refresh_saved_targets()
         except Exception as exc:
             logging.getLogger(__name__).exception(
@@ -174,5 +191,10 @@ class TargetsTab(Theme):
             self.on_status(f"Could not update targets: {exc}")
             return
 
-        self.on_status(f"Updated {len(selected)} target settings.")
-        self.log(f"Updated {len(selected)} target settings.")
+        state = "enabled" if enabled else "disabled"
+        self.on_status(
+            f"Set {len(selected)} selected target(s) to {state}."
+        )
+        self.log(
+            f"Set {len(selected)} selected target(s) to {state}."
+        )

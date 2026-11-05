@@ -16,7 +16,7 @@ from zalo_ai.workflows import (
 from .prompt_tab import PromptTab
 from .summarize_tab import SummarizeTab
 from .targets_tab import TargetsTab
-from .theme import configure_dark_theme, style_text_widget
+from .theme import Theme, style_text_widget
 
 
 Job = Callable[[Callable[[str], None]], object]
@@ -30,7 +30,7 @@ class ZaloSummarizerUI:
         self.root.title("Zalo AI Summarizer")
         self.root.geometry("960x760")
         self.root.minsize(820, 640)
-        self.colors = configure_dark_theme(root)
+        self.colors = Theme.configure_dark_theme(root)
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False

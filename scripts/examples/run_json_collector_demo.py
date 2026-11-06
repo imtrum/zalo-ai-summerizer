@@ -1,8 +1,9 @@
 from zalo_ai.collector.message_collector import JsonMessageCollector
+from zalo_ai.paths import SAMPLE_MESSAGES_FILE
 
 
 def main() -> None:
-    collector = JsonMessageCollector("data/sample_messages.json")
+    collector = JsonMessageCollector(SAMPLE_MESSAGES_FILE)
     messages = collector.collect_messages()
 
     print(f"Loaded {len(messages)} messages")

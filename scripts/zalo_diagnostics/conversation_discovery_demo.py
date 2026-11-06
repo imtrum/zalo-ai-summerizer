@@ -1,12 +1,11 @@
-from pathlib import Path
-
 from playwright.sync_api import sync_playwright
 
-from zalo_ai.targets.zalo_discovery import discover_conversations
+from zalo_ai.integrations.zalo.conversations import discover_conversations
+from zalo_ai.paths import BROWSER_PROFILE
 
 
 def main() -> None:
-    profile = Path("data/browser_profile").resolve()
+    profile = BROWSER_PROFILE
 
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(

@@ -1,11 +1,11 @@
 
 import json
-from pathlib import Path
 from typing import Any
 
+from zalo_ai.paths import PROJECT_ROOT, TARGETS_FILE as DEFAULT_TARGETS_FILE
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-TARGETS_FILE = PROJECT_ROOT / "data" / "targets.json"
+
+TARGETS_FILE = DEFAULT_TARGETS_FILE
 
 
 def ensure_targets_file() -> None:

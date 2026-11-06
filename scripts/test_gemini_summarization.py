@@ -1,4 +1,4 @@
-from examples.test_gemini_summarization import main
+from examples.gemini_summarization_demo import main
 
 
 if __name__ == "__main__":

@@ -1,11 +1,12 @@
 
-from pathlib import Path
-
 from playwright.sync_api import sync_playwright
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BROWSER_PROFILE = PROJECT_ROOT / "data" / "browser_profile"
+from zalo_ai.integrations.zalo.selectors import (
+    CONVERSATION_SCROLL_CONTAINER_SELECTOR,
+    CONVERSATION_SELECTOR,
+    CONVERSATION_SELECTORS,
+)
+from zalo_ai.paths import BROWSER_PROFILE
 
 
 def main() -> None:
@@ -26,7 +27,7 @@ def main() -> None:
 
             # Inspect the ancestors of the conversation list.
             scroll_info = page.locator(
-                ".ReactVirtualized__Grid__innerScrollContainer"
+                CONVERSATION_SCROLL_CONTAINER_SELECTOR
             ).evaluate(
                 """element => {
                     const ancestors = [];
@@ -56,7 +57,7 @@ def main() -> None:
 
             # Find the nearest ancestor that can scroll vertically.
             scroll_container = page.locator(
-                ".ReactVirtualized__Grid__innerScrollContainer"
+                CONVERSATION_SCROLL_CONTAINER_SELECTOR
             ).evaluate_handle(
                 """element => {
                     let current = element;
@@ -100,11 +101,11 @@ def main() -> None:
             while unchanged_rounds < 3:
                 # Collect currently rendered conversations and ID attributes.
                 visible_conversations = page.locator(
-                    ".msg-item"
+                    CONVERSATION_SELECTOR
                 ).evaluate_all(
-                    """items => items.map(item => {
+                    """(items, selectors) => items.map(item => {
                         const name = item.querySelector(
-                            ".conv-item-title__name"
+                            selectors.name_selector
                         );
 
                         return {
@@ -112,10 +113,11 @@ def main() -> None:
                                 ? name.innerText.trim().replace(/\\u00a0/g, " ")
                                 : null,
                             element_id: item.id || null,
-                            data_id: item.getAttribute("data-id"),
-                            anim_data_id: item.getAttribute("anim-data-id"),
+                            data_id: item.getAttribute(selectors.data_id_attribute),
+                            anim_data_id: item.getAttribute(selectors.id_attribute),
                         };
-                    })"""
+                    })""",
+                    CONVERSATION_SELECTORS
                 )
 
                 for conversation in visible_conversations:

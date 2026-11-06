@@ -1,4 +1,4 @@
-from zalo_diagnostics.discover_conversation import main
+from zalo_diagnostics.conversation_discovery_demo import main
 
 
 if __name__ == "__main__":

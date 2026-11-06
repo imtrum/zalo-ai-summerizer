@@ -1,21 +1,25 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from threading import Event
 
 from playwright.sync_api import sync_playwright
 
 from zalo_ai.ai.providers.provider_factory import create_provider
 from zalo_ai.cancellation import check_cancellation
-from zalo_ai.collector.zalo_message_collector import ZaloMessageCollector
+from zalo_ai.config.timezone import VN_TZ
+from zalo_ai.integrations.zalo.messages.collector import ZaloMessageCollector
 from zalo_ai.models.message import Message
 from zalo_ai.summarizer.batch_summarization_service import (
     BatchSummarizationService,
 )
 from zalo_ai.summarizer.summarization_service import SummarizationService
 from zalo_ai.targets.json_store import get_enabled_targets
-from zalo_ai.targets.zalo_discovery import (
-    SCROLL_CONTAINER_SELECTOR,
+from zalo_ai.integrations.zalo.conversations import (
     get_visible_conversation_ids,
     open_visible_conversation,
+)
+from zalo_ai.integrations.zalo.selectors import (
+    CONVERSATION_SCROLL_CONTAINER_SELECTOR,
+    MESSAGE_FRAME_SELECTOR,
 )
 from .browser import (
     ProgressCallback,
@@ -23,9 +27,6 @@ from .browser import (
     open_zalo,
     wait_for_locator,
 )
-
-
-VN_TZ = timezone(timedelta(hours=7))
 
 
 def run_summarization(
@@ -56,7 +57,7 @@ def run_summarization(
 
         try:
             scroll_handle = page.locator(
-                SCROLL_CONTAINER_SELECTOR
+                CONVERSATION_SCROLL_CONTAINER_SELECTOR
             ).first.evaluate_handle(
                 """element => {
                     for (
@@ -125,7 +126,7 @@ def run_summarization(
 
                         wait_for_locator(
                             page.locator(
-                                '[data-component="message-content-view"]'
+                                MESSAGE_FRAME_SELECTOR
                             ).first,
                             timeout_ms=15000,
                             cancel_event=cancel_event,

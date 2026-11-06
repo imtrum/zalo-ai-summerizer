@@ -1,15 +1,16 @@
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import datetime
 
 from playwright.sync_api import sync_playwright
 
-from zalo_ai.collector.zalo_message_collector import ZaloMessageCollector
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BROWSER_PROFILE = PROJECT_ROOT / "data" / "browser_profile"
-VN_TZ = timezone(timedelta(hours=7))
+from zalo_ai.config.timezone import VN_TZ
+from zalo_ai.integrations.zalo.messages.collector import ZaloMessageCollector
+from zalo_ai.integrations.zalo.selectors import (
+    CONVERSATION_ID_ATTRIBUTE,
+    CONVERSATION_SELECTOR,
+    MESSAGE_FRAME_SELECTOR,
+)
+from zalo_ai.paths import BROWSER_PROFILE
 
 
 def main() -> None:
@@ -33,14 +34,14 @@ def main() -> None:
             page.goto("https://chat.zalo.me/")
 
             conversation = page.locator(
-                f'.msg-item[anim-data-id="{target_id}"]'
+                f'{CONVERSATION_SELECTOR}[{CONVERSATION_ID_ATTRIBUTE}="{target_id}"]'
             )
 
             conversation.wait_for(state="visible", timeout=15000)
             conversation.click()
 
             page.locator(
-                '[data-component="message-content-view"]'
+                MESSAGE_FRAME_SELECTOR
             ).first.wait_for(state="visible", timeout=15000)
 
             print(f"Opened conversation: {target_id}")

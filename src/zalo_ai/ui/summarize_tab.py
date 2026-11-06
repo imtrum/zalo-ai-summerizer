@@ -1,13 +1,12 @@
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+
+from zalo_ai.config.timezone import VN_TZ
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .theme import Theme
-
-
-VN_TZ = timezone(timedelta(hours=7))
 
 
 class SummarizeTab(Theme):

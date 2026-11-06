@@ -1,13 +1,14 @@
 
 import logging
 
-from zalo_ai.config.logging_config import setup_logging
+from zalo_ai.config import logging_config
 
 
 def test_setup_logging_creates_log_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    setup_logging()
+    monkeypatch.setattr(logging_config, "LOG_DIR", tmp_path / "logs")
+    logging_config.setup_logging()
 
     logger = logging.getLogger("test_zalo_ai")
     logger.info("Logging test message")

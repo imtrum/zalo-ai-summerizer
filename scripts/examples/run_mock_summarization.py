@@ -1,6 +1,7 @@
 
 from zalo_ai.ai.providers.mock_provider import MockProvider
 from zalo_ai.collector.message_collector import JsonMessageCollector
+from zalo_ai.paths import SAMPLE_MESSAGES_FILE
 from zalo_ai.summarizer.batch_summarization_service import (
     BatchSummarizationService,
 )
@@ -8,7 +9,7 @@ from zalo_ai.summarizer.summarization_service import SummarizationService
 
 
 def main() -> None:
-    collector = JsonMessageCollector("data/sample_messages.json")
+    collector = JsonMessageCollector(SAMPLE_MESSAGES_FILE)
     messages = collector.collect_messages()
 
     mock_provider = MockProvider()

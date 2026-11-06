@@ -1,4 +1,4 @@
-from examples.test_batch_pipeline import main
+from examples.batch_pipeline_demo import main
 
 
 if __name__ == "__main__":

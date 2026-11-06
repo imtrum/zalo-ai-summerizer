@@ -1,8 +1,7 @@
-from pathlib import Path
+from zalo_ai.paths import PROJECT_ROOT, SUMMARIZATION_PROMPT_FILE
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-PROMPT_FILE = PROJECT_ROOT / "data" / "summarization_prompt.txt"
+PROMPT_FILE = SUMMARIZATION_PROMPT_FILE
 
 DEFAULT_PROMPT = (
     "Summarize the following conversation in Vietnamese.\n"

@@ -1,19 +1,30 @@
-from datetime import timedelta, timezone
-from pathlib import Path
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BROWSER_PROFILE = PROJECT_ROOT / "data" / "browser_profile"
+from zalo_ai.config.timezone import VN_TZ
+from zalo_ai.integrations.zalo.selectors import (
+    CONVERSATION_DATA_ID_ATTRIBUTE,
+    CONVERSATION_ID_ATTRIBUTE,
+    CONVERSATION_NAME_SELECTOR,
+    CONVERSATION_SCROLL_CONTAINER_SELECTOR,
+    CONVERSATION_SELECTOR,
+    FRAME_SELECTOR,
+    SENDER_SELECTOR,
+    TEXT_SELECTOR,
+    TIME_SELECTOR,
+)
+from zalo_ai.paths import BROWSER_PROFILE, PROJECT_ROOT
 
 # Selectors are exploratory observations and should be rechecked against Zalo.
 SELECTORS = {
-    "frame": '[data-component="message-content-view"]',
-    "text": '[data-component="message-text-content"]',
-    "sender": ".message-sender-name-content",
-    "time": ".card-send-time__sendTime, .card-send-time",
+    "frame": FRAME_SELECTOR,
+    "text": TEXT_SELECTOR,
+    "sender": SENDER_SELECTOR,
+    "time": TIME_SELECTOR,
+    "conversation": CONVERSATION_SELECTOR,
+    "conversation_name": CONVERSATION_NAME_SELECTOR,
+    "conversation_id_attribute": CONVERSATION_ID_ATTRIBUTE,
+    "conversation_data_id_attribute": CONVERSATION_DATA_ID_ATTRIBUTE,
+    "conversation_scroll_container": CONVERSATION_SCROLL_CONTAINER_SELECTOR,
 }
 
 MISSING = "<THIẾU>"
 MAX_SCROLL_ROUNDS = 6
 SCROLL_WAIT_MS = 1500
-VN_TZ = timezone(timedelta(hours=7))

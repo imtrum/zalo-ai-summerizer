@@ -1,12 +1,10 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from zalo_ai.config.logging_config import setup_logging
 from zalo_ai.targets.json_store import get_enabled_targets
+from zalo_ai.config.timezone import VN_TZ
 from zalo_ai.workflows import run_summarization
-
-
-VN_TZ = timezone(timedelta(hours=7))
 
 
 def main() -> None:

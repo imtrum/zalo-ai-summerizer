@@ -10,11 +10,51 @@ from playwright.sync_api import (
 from zalo_ai.cancellation import check_cancellation
 from .selectors import (
     CONVERSATION_ID_ATTRIBUTE,
-    CONVERSATION_NAME_SELECTOR,
     CONVERSATION_SCROLL_CONTAINER_SELECTOR as SCROLL_CONTAINER_SELECTOR,
     CONVERSATION_SELECTORS,
     CONVERSATION_SELECTOR,
 )
+
+SCROLL_PAUSE_MS = 800
+
+# Nearest scrollable ancestor of the given element (or null).
+_FIND_SCROLLER_JS = """element => {
+    for (
+        let current = element;
+        current && current !== document.body;
+        current = current.parentElement
+    ) {
+        if (
+            current.scrollHeight > current.clientHeight &&
+            ["auto", "scroll", "overlay"].includes(
+                getComputedStyle(current).overflowY
+            )
+        ) {
+            return current;
+        }
+    }
+    return null;
+}"""
+
+# Name and id of every conversation row currently in the DOM.
+_COLLECT_JS = """(items, selectors) => items.map(item => ({
+    name: item.querySelector(
+        selectors.name_selector
+    )?.innerText.trim().replace(/\\u00a0/g, " ") || "",
+    id: item.getAttribute(selectors.id_attribute) || ""
+}))"""
+
+_SCROLL_STATE_JS = """element => ({
+    top: element.scrollTop,
+    max: element.scrollHeight - element.clientHeight
+})"""
+
+# Scroll one page (a negative direction scrolls up).
+_SCROLL_STEP_JS = """(element, direction) => {
+    element.scrollTop += direction * Math.max(
+        300, element.clientHeight * 0.8
+    );
+}"""
 
 
 def _wait_for_conversation_list(
@@ -51,136 +91,52 @@ def discover_conversations(
     cancel_event: Event | None = None,
 ) -> list[dict[str, str]]:
     """Discover conversations by scrolling to the top, then the bottom."""
-    check_cancellation(cancel_event)
-    if cancel_event is None:
-        page.locator(CONVERSATION_SELECTOR).first.wait_for(
-            state="visible",
-            timeout=15000,
-        )
-    else:
-        _wait_for_conversation_list(page, cancel_event)
-    check_cancellation(cancel_event)
+    _wait_for_conversation_list(page, cancel_event)
 
     scroll_handle = page.locator(
         SCROLL_CONTAINER_SELECTOR
-    ).evaluate_handle(
-        """element => {
-            for (
-                let current = element;
-                current && current !== document.body;
-                current = current.parentElement
-            ) {
-                const style = getComputedStyle(current);
-                if (
-                    current.scrollHeight > current.clientHeight &&
-                    ["auto", "scroll", "overlay"].includes(style.overflowY)
-                ) {
-                    return current;
-                }
-            }
-            return null;
-        }"""
-    )
-
+    ).evaluate_handle(_FIND_SCROLLER_JS)
     scroll_container = scroll_handle.as_element()
     conversations: dict[str, dict[str, str]] = {}
 
     def collect_visible() -> None:
         check_cancellation(cancel_event)
-        visible = page.locator(
-            CONVERSATION_SELECTOR
-        ).evaluate_all(
-            """(items, selectors) => items.map(item => ({
-                name: item.querySelector(
-                    selectors.name_selector
-                )?.innerText.trim().replace(/\\u00a0/g, " ") || "",
-                id: item.getAttribute(selectors.id_attribute) || ""
-            }))""",
-            CONVERSATION_SELECTORS
+        visible = page.locator(CONVERSATION_SELECTOR).evaluate_all(
+            _COLLECT_JS, CONVERSATION_SELECTORS
         )
-
         for item in visible:
+            if item["name"] and item["id"]:
+                conversations[item["id"]] = item
+
+    def scroll_to_end(direction: int) -> None:
+        """Scroll up (-1) or down (+1) until the end stops moving."""
+        unchanged_rounds = 0
+        while unchanged_rounds < max_unchanged_rounds:
+            collect_visible()
+
+            before = scroll_container.evaluate(_SCROLL_STATE_JS)
+            at_end = (
+                before["top"] <= 0
+                if direction < 0
+                else before["top"] >= before["max"]
+            )
+            if at_end:
+                return
+
+            scroll_container.evaluate(_SCROLL_STEP_JS, direction)
+            page.wait_for_timeout(SCROLL_PAUSE_MS)
             check_cancellation(cancel_event)
-            name = item["name"]
-            target_id = item["id"]
-            if name and target_id:
-                conversations[target_id] = {
-                    "id": target_id,
-                    "name": name,
-                }
+
+            after = scroll_container.evaluate(_SCROLL_STATE_JS)
+            unchanged_rounds = (
+                unchanged_rounds + 1 if after["top"] == before["top"] else 0
+            )
 
     try:
-        if scroll_container is None:
-            collect_visible()
-            return list(conversations.values())
-
-        # Phase 1: Scroll upward until reaching the top.
-        unchanged_rounds = 0
-        while unchanged_rounds < max_unchanged_rounds:
-            check_cancellation(cancel_event)
-            collect_visible()
-
-            current_top = scroll_container.evaluate(
-                "(element) => element.scrollTop"
-            )
-            if current_top <= 0:
-                break
-
-            scroll_container.evaluate(
-                """element => {
-                    element.scrollTop -= Math.max(
-                        300, element.clientHeight * 0.8
-                    );
-                }"""
-            )
-            page.wait_for_timeout(800)
-            check_cancellation(cancel_event)
-
-            new_top = scroll_container.evaluate(
-                "(element) => element.scrollTop"
-            )
-            if new_top == current_top:
-                unchanged_rounds += 1
-            else:
-                unchanged_rounds = 0
-
-        # Phase 2: Scroll downward until reaching the bottom.
-        unchanged_rounds = 0
-        while unchanged_rounds < max_unchanged_rounds:
-            check_cancellation(cancel_event)
-            collect_visible()
-
-            position = scroll_container.evaluate(
-                """element => ({
-                    top: element.scrollTop,
-                    max: element.scrollHeight - element.clientHeight
-                })"""
-            )
-            if position["top"] >= position["max"]:
-                break
-
-            scroll_container.evaluate(
-                """element => {
-                    element.scrollTop += Math.max(
-                        300, element.clientHeight * 0.8
-                    );
-                }"""
-            )
-            page.wait_for_timeout(800)
-            check_cancellation(cancel_event)
-
-            new_top = scroll_container.evaluate(
-                "(element) => element.scrollTop"
-            )
-            if new_top == position["top"]:
-                unchanged_rounds += 1
-            else:
-                unchanged_rounds = 0
-
-        # Capture the final visible rows at the bottom.
-        check_cancellation(cancel_event)
-        collect_visible()
-
+        if scroll_container is not None:
+            scroll_to_end(-1)
+            scroll_to_end(1)
+        collect_visible()  # the rows left at the bottom (or the only rows)
     finally:
         if scroll_container is not None:
             scroll_container.dispose()

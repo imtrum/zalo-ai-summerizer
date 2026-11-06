@@ -2,7 +2,7 @@ from threading import Event
 
 from playwright.sync_api import sync_playwright
 
-from zalo_ai.cancellation import check_cancellation
+from zalo_ai.common.cancellation import check_cancellation
 from zalo_ai.targets.json_store import add_selected_targets, ensure_targets_file
 from zalo_ai.integrations.zalo.conversations import discover_conversations
 from .browser import ProgressCallback, notify, open_zalo

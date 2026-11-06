@@ -11,7 +11,7 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from zalo_ai.cancellation import check_cancellation
+from zalo_ai.common.cancellation import check_cancellation
 from zalo_ai.integrations.zalo.selectors import CONVERSATION_SELECTOR
 from zalo_ai.paths import BROWSER_PROFILE, PROJECT_ROOT
 

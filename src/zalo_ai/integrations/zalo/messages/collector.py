@@ -4,7 +4,7 @@ from threading import Event
 
 from playwright.sync_api import Page
 
-from zalo_ai.cancellation import check_cancellation
+from zalo_ai.common.cancellation import check_cancellation
 from zalo_ai.collector.message_collector import MessageCollector
 from zalo_ai.config.timezone import VN_TZ
 from .parser import (

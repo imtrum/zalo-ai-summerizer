@@ -1,11 +1,4 @@
-from threading import Event
+"""Compatibility exports for the shared cancellation helpers."""
+from zalo_ai.common.cancellation import CancellationRequested, check_cancellation
 
-
-class CancellationRequested(Exception):
-    """Raised when the user asks an active workflow to stop."""
-
-
-def check_cancellation(cancel_event: Event | None) -> None:
-    """Stop at a safe checkpoint when the user has requested cancellation."""
-    if cancel_event is not None and cancel_event.is_set():
-        raise CancellationRequested("The operation was cancelled.")
+__all__ = ["CancellationRequested", "check_cancellation"]

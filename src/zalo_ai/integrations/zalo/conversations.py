@@ -7,7 +7,7 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from zalo_ai.cancellation import check_cancellation
+from zalo_ai.common.cancellation import check_cancellation
 from .selectors import (
     CONVERSATION_ID_ATTRIBUTE,
     CONVERSATION_SCROLL_CONTAINER_SELECTOR as SCROLL_CONTAINER_SELECTOR,

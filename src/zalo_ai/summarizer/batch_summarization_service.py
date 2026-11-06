@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable
 from threading import Event
 
-from zalo_ai.cancellation import check_cancellation
+from zalo_ai.common.cancellation import check_cancellation
 from zalo_ai.models.message import Message
 from zalo_ai.summarizer.message_batcher import create_batches
 from zalo_ai.summarizer.summarization_service import SummarizationService

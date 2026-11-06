@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
-from zalo_ai.cancellation import CancellationRequested
+from zalo_ai.common.cancellation import CancellationRequested
 from zalo_ai.config.logging_config import setup_logging
 from zalo_ai.targets.json_store import ensure_targets_file, load_targets
 from zalo_ai.workflows import (

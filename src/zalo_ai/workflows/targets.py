@@ -15,7 +15,7 @@ def discover_target_conversations(
     """Open Zalo and discover conversations for the target refresh screen."""
     check_cancellation(cancel_event)
     with sync_playwright() as playwright:
-        context, page = open_zalo(on_status, playwright)
+        context, page = open_zalo(on_status, playwright, cancel_event=cancel_event)
 
         try:
             notify(on_status, "Discovering conversations.")

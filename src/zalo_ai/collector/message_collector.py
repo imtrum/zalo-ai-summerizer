@@ -1,20 +1,9 @@
 import json
-from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
+from .base import MessageCollector
 from zalo_ai.models.message import Message
-
-
-class MessageCollector(ABC):
-    """Interface for collecting messages from a message source."""
-
-    @abstractmethod
-    def collect_messages(self) -> list[Message]:
-        """Collect messages and return them as Message objects."""
-        raise NotImplementedError
-
-
 
 class JsonMessageCollector(MessageCollector):
     """Load messages from a local JSON file."""

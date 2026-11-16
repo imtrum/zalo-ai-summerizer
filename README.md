@@ -10,6 +10,9 @@ From the project directory, activate your virtual environment and run:
 python scripts/ui.py
 ```
 
+Other commands are listed in [scripts/README.md](scripts/README.md). They
+include headless summarization, target refresh, sample demos, and diagnostics.
+
 After installing the project, the console command is also available:
 
 ```powershell
@@ -36,12 +39,12 @@ The app saves the custom prompt in data/summarization_prompt.txt. Both that file
 
 ## Code layout
 
-- src/zalo_ai/ui/ contains the desktop app shell, shared theme, and individual tabs.
-- src/zalo_ai/workflows/ coordinates summarization and target-refresh flows; the existing zalo_ai.workflows public imports remain available.
-- src/zalo_ai/integrations/zalo/ contains Zalo browser, conversation, selector, message collection, parsing, and scrolling code.
-- src/zalo_ai/ai/, config/, models/, summarizer/, and targets/ contain provider, configuration, data, and summarization logic. Compatibility modules preserve former Zalo collector and discovery imports.
-- src/zalo_ai/paths.py anchors project data, browser-session, prompt, and log paths to the project root.
-- scripts/zalo_diagnostics/ contains manual diagnostics, while scripts/examples/ contains runnable demonstrations. Use discover_conversations.py, run_batch_pipeline_demo.py, and run_gemini_summarization_demo.py for the renamed manual commands. The prior test_* script launchers remain available for compatibility.
-- tests/ groups automated tests by domain, and tests/fixtures/ contains committed sample input data.
+- `src/zalo_ai/ui/` contains the desktop app shell, shared theme, and individual tabs.
+- `src/zalo_ai/workflows/` coordinates summarization and target-refresh flows.
+- `src/zalo_ai/integrations/zalo/` contains Zalo browser, conversation, selector, message collection, parsing, and scrolling code.
+- `src/zalo_ai/ai/`, `config/`, `models/`, `summarizer/`, and `targets/` contain provider, configuration, data, and summarization logic.
+- `src/zalo_ai/paths.py` anchors project data, browser-session, prompt, and log paths to the project root.
+- `scripts/` contains the app launcher, headless flows, demos, and diagnostics.
+- `tests/` groups automated tests by domain, and `tests/fixtures/` contains committed sample input data.
 
 Runtime files such as .env, data/targets.json, data/summarization_prompt.txt, data/browser_profile/, and logs/ remain rooted at the project directory and are excluded from Git.

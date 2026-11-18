@@ -10,7 +10,18 @@ requires-python = ">=3.10"
 dependencies = [
     "google-genai>=2.29.0",
     "playwright>=1.63.0",
+    "python-dotenv>=1.0.0",
 ]
+
+[project.scripts]
+zalo-ai-summarizer = "zalo_ai.ui:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,19 +1,21 @@
 
+import json
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
+
+from zalo_ai.config.timezone import VN_TZ
+from zalo_ai.integrations.zalo.selectors import (
+    FRAME_SELECTOR,
+    SENDER_SELECTOR,
+    TEXT_SELECTOR,
+    TIME_SELECTOR,
+)
 
 
-VN_TZ = timezone(timedelta(hours=7))
-
-FRAME_SELECTOR = '[data-component="message-content-view"]'
-TEXT_SELECTOR = '[data-component="message-text-content"]'
-SENDER_SELECTOR = ".message-sender-name-content"
-TIME_SELECTOR = ".card-send-time__sendTime, .card-send-time"
-
-
-COLLECT_JS = """() => {
+COLLECT_JS = (
+    """() => {
     const frames = [...document.querySelectorAll(
-        '[data-component="message-content-view"]'
+        __FRAME_SELECTOR__
     )];
 
     const clean = (value) =>
@@ -22,7 +24,7 @@ COLLECT_JS = """() => {
     const separators = [...document.querySelectorAll('*')]
         .filter(el =>
             el.children.length === 0 &&
-            !el.closest('[data-component="message-content-view"]') &&
+            !el.closest(__FRAME_SELECTOR__) &&
             /^(T[2-7]\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{4}|CN\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{4}|Hôm nay|Hôm qua|\\d{1,2}\\/\\d{1,2}\\/\\d{4})$/i
                 .test(clean(el.textContent))
         );
@@ -34,14 +36,14 @@ COLLECT_JS = """() => {
             const parent = row.parentElement;
             if (!parent ||
                 parent.querySelectorAll(
-                    '[data-component="message-content-view"]'
+                    __FRAME_SELECTOR__
                 ).length !== 1) break;
             row = parent;
         }
 
-        const sender = row.querySelector('.message-sender-name-content');
+        const sender = row.querySelector(__SENDER_SELECTOR__);
         const timeElement = row.querySelector(
-            '.card-send-time__sendTime, .card-send-time'
+            __TIME_SELECTOR__
         );
 
         const fullTimeElement = [...row.querySelectorAll('*')].find(el =>
@@ -70,7 +72,7 @@ COLLECT_JS = """() => {
                 || ids[0] || null,
             sender: sender ? clean(sender.innerText) : null,
             content: [...frame.querySelectorAll(
-                '[data-component="message-text-content"]'
+                __TEXT_SELECTOR__
             )].map(el => clean(el.innerText)).filter(Boolean).join('\\n'),
             time_text: timeElement ? clean(timeElement.innerText) : null,
             full_time_text: fullTimeElement
@@ -78,7 +80,11 @@ COLLECT_JS = """() => {
             date_separator: previousDate ? clean(previousDate.textContent) : null
         };
     });
-}"""
+}""".replace("__FRAME_SELECTOR__", json.dumps(FRAME_SELECTOR))
+    .replace("__TEXT_SELECTOR__", json.dumps(TEXT_SELECTOR))
+    .replace("__SENDER_SELECTOR__", json.dumps(SENDER_SELECTOR))
+    .replace("__TIME_SELECTOR__", json.dumps(TIME_SELECTOR))
+)
 
 
 def clean_text(value: str | None) -> str | None:

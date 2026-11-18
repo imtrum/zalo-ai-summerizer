@@ -1,13 +1,25 @@
+import logging
 import time
 
 from google import genai
-from google.genai import errors, types
+from google.genai import types
 
 from zalo_ai.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Seconds to wait before each retry when a model is busy (HTTP 503).
+RETRY_DELAYS = (5, 10)
+# HTTP codes meaning "this model can't serve us right now": try the next one.
+FALLBACK_CODES = {429, 503}
 
 
 class GeminiProviderError(RuntimeError):
     """A handled failure while requesting a Gemini response."""
+
+
+class _TryNextModel(Exception):
+    """The current model is unusable for this request; fall back."""
 
 
 class GeminiProvider:
@@ -19,130 +31,92 @@ class GeminiProvider:
                 "GEMINI_API_KEY is missing. "
                 "Please configure it in your .env file."
             )
-
         if not settings.AI_MODEL:
             raise ValueError(
                 "AI_MODEL is missing. "
                 "Please configure it in your .env file."
             )
 
-        configured_models = [
-            settings.AI_MODEL,
-            *settings.AI_FALLBACK_MODELS,
-        ]
         self.models = tuple(dict.fromkeys(
             model.strip()
-            for model in configured_models
+            for model in (settings.AI_MODEL, *settings.AI_FALLBACK_MODELS)
             if model.strip()
         ))
-        self.active_model_index = 0
-
-        self.client = genai.Client(
-            api_key=settings.GEMINI_API_KEY
-        )
+        self._start = 0  # stay on a fallback model once we had to switch
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     def generate(self, prompt: str) -> str:
-        """Generate with fallback models on quota or capacity errors."""
+        """Generate text, retrying busy models and falling back if needed."""
         if not prompt.strip():
             raise ValueError("Prompt cannot be empty.")
 
-        print(f"Max tokens per request = {settings.AI_MAX_TOKENS}")
+        last_error = ""
+        for index in range(self._start, len(self.models)):
+            try:
+                text = self._request(self.models[index], prompt)
+            except _TryNextModel as exc:
+                last_error = str(exc)
+                logger.warning("%s Trying the next model.", exc)
+                continue
+            self._start = index
+            return text
 
-        response = None
-        used_model = ""
+        raise GeminiProviderError(
+            f"All configured Gemini models failed. Last error: {last_error}"
+        )
 
-        for model_index in range(
-            self.active_model_index,
-            len(self.models),
-        ):
-            model = self.models[model_index]
-
-            for attempt in range(3):
-                try:
-                    response = self.client.models.generate_content(
-                        model=model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            temperature=settings.AI_TEMPERATURE,
-                            max_output_tokens=settings.AI_MAX_TOKENS,
-                        ),
-                    )
-                    used_model = model
-                    self.active_model_index = model_index
-                    break
-
-                except errors.APIError as exc:
-                    if exc.code == 503 and attempt < 2:
-                        delay = 5 * (2 ** attempt)
-                        print(
-                            f"Gemini model '{model}' is busy. "
-                            f"Retrying in {delay} seconds..."
-                        )
-                        time.sleep(delay)
-                        continue
-
-                    if exc.code in {429, 503}:
-                        if model_index + 1 < len(self.models):
-                            next_model = self.models[model_index + 1]
-                            self.active_model_index = model_index + 1
-                            print(
-                                f"Gemini model '{model}' returned "
-                                f"{exc.code} ({exc.status}). "
-                                f"Switching to '{next_model}'."
-                            )
-                            break
-
-                        raise GeminiProviderError(
-                            "All configured Gemini models failed. "
-                            f"Last model '{model}' returned "
-                            f"{exc.code} {exc.status}: {exc.message}"
-                        ) from exc
-
-                    raise GeminiProviderError(
-                        f"Gemini request failed for model '{model}' "
-                        f"({exc.code} {exc.status}): {exc.message}"
-                    ) from exc
-
-                except Exception as exc:
-                    raise GeminiProviderError(
-                        f"Unexpected error while requesting Gemini model "
-                        f"'{model}': {type(exc).__name__}: {exc}"
-                    ) from exc
-
-            if response is not None:
-                break
-
-        if response is None:
-            raise GeminiProviderError(
-                "Gemini did not return a response from any configured model."
-            )
-
-        usage = response.usage_metadata
-        if usage is not None:
-            print(
-                f"[Gemini tokens] model={used_model} "
-                f"total={usage.total_token_count or 0}"
-            )
-        else:
-            print(
-                f"[Gemini tokens] model={used_model} "
-                "usage unavailable"
-            )
-
-        if response.text is None:
-            raise GeminiProviderError(
-                f"Gemini model '{used_model}' returned no text. "
-                "The response may have been blocked or empty."
-            )
-
-        if response.candidates:
-            finish_reason = response.candidates[0].finish_reason
-
-            if finish_reason == types.FinishReason.MAX_TOKENS:
-                raise GeminiProviderError(
-                    f"Gemini model '{used_model}' summary was truncated "
-                    "at the output-token limit. Increase AI_MAX_TOKENS "
-                    "or summarize fewer messages per request."
+    def _request(self, model: str, prompt: str) -> str:
+        """Query one model. Raise _TryNextModel if another model may work."""
+        for attempt, delay in enumerate((*RETRY_DELAYS, None)):
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=settings.AI_TEMPERATURE,
+                        max_output_tokens=settings.AI_MAX_TOKENS,
+                    ),
                 )
+                break
+            except Exception as exc:
+                code = getattr(exc, "code", None)  # set by genai APIError
+                if code == 503 and delay is not None:
+                    logger.warning(
+                        "Gemini '%s' is busy. Retrying in %ss...", model, delay
+                    )
+                    time.sleep(delay)
+                    continue
+                message = f"'{model}' failed: {type(exc).__name__}: {exc}"
+                if code in FALLBACK_CODES:
+                    raise _TryNextModel(f"Gemini model {message}") from exc
+                raise GeminiProviderError(f"Gemini request {message}") from exc
 
-        return response.text.strip()
+        logger.info(
+            "Gemini tokens: model=%s total=%s",
+            model,
+            getattr(response.usage_metadata, "total_token_count", None),
+        )
+
+        text = (response.text or "").strip()
+        if not text:
+            finish_reasons = [
+                str(candidate.finish_reason)
+                for candidate in response.candidates or []
+            ]
+            raise _TryNextModel(
+                f"Gemini returned no text from model '{model}' "
+                f"(prompt_feedback={response.prompt_feedback!r}, "
+                f"finish_reasons={finish_reasons})."
+            )
+
+        if (
+            response.candidates
+            and response.candidates[0].finish_reason
+            == types.FinishReason.MAX_TOKENS
+        ):
+            raise GeminiProviderError(
+                f"Gemini model '{model}' summary was truncated at the "
+                "output-token limit. Increase AI_MAX_TOKENS or summarize "
+                "fewer messages per request."
+            )
+        return text

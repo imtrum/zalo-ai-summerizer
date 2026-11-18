@@ -2,8 +2,10 @@ import os
 
 from dotenv import load_dotenv
 
+from zalo_ai.paths import PROJECT_ROOT
 
-load_dotenv()
+
+load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
 
 
 AI_PROVIDER = os.getenv("AI_PROVIDER", "")

@@ -1,8 +1,7 @@
 
 from playwright.sync_api import ElementHandle, Page
 
-
-FRAME_SELECTOR = '[data-component="message-content-view"]'
+from zalo_ai.integrations.zalo.selectors import FRAME_SELECTOR
 
 FIND_SCROLLER_JS = """(frameSel) => {
     const first = document.querySelector(frameSel);

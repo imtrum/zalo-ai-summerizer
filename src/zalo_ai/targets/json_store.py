@@ -1,11 +1,23 @@
 
 import json
-from pathlib import Path
 from typing import Any
 
+from zalo_ai.paths import PROJECT_ROOT, TARGETS_FILE as DEFAULT_TARGETS_FILE
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-TARGETS_FILE = PROJECT_ROOT / "data" / "targets.json"
+
+TARGETS_FILE = DEFAULT_TARGETS_FILE
+
+
+def ensure_targets_file() -> None:
+    """Create an empty target store when the project has none yet."""
+    if TARGETS_FILE.exists():
+        return
+
+    TARGETS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TARGETS_FILE.write_text(
+        '{"targets": []}\n',
+        encoding="utf-8",
+    )
 
 
 def _read_data() -> dict[str, Any]:

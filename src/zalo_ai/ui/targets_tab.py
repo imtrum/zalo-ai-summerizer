@@ -3,15 +3,14 @@ from collections.abc import Callable
 import tkinter as tk
 from tkinter import ttk
 
-from zalo_ai.targets.json_store import (
-    load_targets,
-    set_target_enabled,
-)
+from zalo_ai.targets.json_store import set_target_enabled
 from zalo_ai.workflows import save_discovered_targets
+from .group_assignment import GroupAssignmentPanel
+from .target_groups import TargetGroups
 from .theme import Theme
 
 
-class TargetsTab(Theme):
+class TargetsTab(TargetGroups, Theme):
     """Discover conversations and manage saved targets."""
 
     def __init__(
@@ -96,16 +95,26 @@ class TargetsTab(Theme):
 
         self.target_tree = ttk.Treeview(
             saved,
-            columns=("name", "enabled"),
+            columns=("name", "groups", "enabled"),
             show="headings",
             selectmode="extended",
             height=7,
         )
         self.target_tree.heading("name", text="Conversation")
+        self.target_tree.heading("groups", text="Groups")
         self.target_tree.heading("enabled", text="Enabled")
         self.target_tree.column("name", width=540, anchor="w")
+        self.target_tree.column("groups", width=220, anchor="w")
         self.target_tree.column("enabled", width=100, anchor="center")
         self.target_tree.pack(fill="both", expand=True)
+        self.group_panel = GroupAssignmentPanel(
+            saved,
+            self.target_tree,
+            self.colors,
+            self.on_status,
+            self.refresh_saved_targets,
+        )
+        self.group_panel.pack(fill="x", pady=(8, 0))
 
     def set_discoveries(
         self,
@@ -146,27 +155,6 @@ class TargetsTab(Theme):
             f"Saved {len(conversations)} selected conversations; "
             f"added {added_count} new targets."
         )
-
-    def refresh_saved_targets(self) -> None:
-        for item in self.target_tree.get_children():
-            self.target_tree.delete(item)
-
-        try:
-            targets = load_targets()
-        except Exception as exc:
-            self.on_status(f"Could not load targets: {exc}")
-            return
-
-        for target in targets:
-            self.target_tree.insert(
-                "",
-                "end",
-                iid=target["id"],
-                values=(
-                    target["name"],
-                    "Yes" if target["enabled"] else "No",
-                ),
-            )
 
     def _enable_selected_targets(self) -> None:
         self._set_selected_targets_enabled(True)

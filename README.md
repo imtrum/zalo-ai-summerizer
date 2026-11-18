@@ -21,7 +21,7 @@ zalo-ai-summarizer
 
 The first app launch creates an empty data/targets.json if one does not exist. In the Targets tab, choose Refresh conversation list, select conversations, and add them as targets. Zalo runs in the background when your saved session is valid; a browser window opens only if you need to sign in.
 
-In the Summarize tab, choose the cutoff date and time in Vietnam time, then start summarization. The Prompt tab lets you edit and save the instructions used for future summaries.
+In the Summarize tab, choose the cutoff date and time in Vietnam time and select a conversation group. The Prompt tab lets you create groups and save a separate prompt for each. In the Targets tab, assign each conversation to one or more groups. Selecting “All enabled conversations” includes every enabled target and uses the shared prompt.
 
 ## Gemini setup
 

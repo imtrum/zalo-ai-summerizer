@@ -9,6 +9,7 @@ from zalo_ai.common.cancellation import check_cancellation
 from zalo_ai.config.timezone import VN_TZ
 from zalo_ai.integrations.zalo.scroll_container import find_scroll_container
 from zalo_ai.targets.json_store import get_enabled_targets
+from zalo_ai.targets.group_store import get_group_prompt
 from .browser import ProgressCallback, open_zalo
 from .conversation_scan import _scan_conversation_list
 from .summarize import _summarize
@@ -18,14 +19,19 @@ def run_summarization(
     cutoff: datetime,
     on_status: ProgressCallback | None = None,
     cancel_event: Event | None = None,
+    group_id: str | None = None,
 ) -> dict[str, str]:
     """Collect enabled Zalo chats and return summaries keyed by target ID."""
     check_cancellation(cancel_event)
     targets_by_id = {
-        target["id"]: target for target in get_enabled_targets()
+        target["id"]: target
+        for target in get_enabled_targets(group_id=group_id)
     }
     if not targets_by_id:
+        if group_id:
+            raise ValueError("No enabled conversations are assigned to this group.")
         raise ValueError("No enabled targets are configured.")
+    group_prompt = get_group_prompt(group_id) if group_id else None
     cutoff = (
         cutoff.replace(tzinfo=VN_TZ)
         if cutoff.tzinfo is None
@@ -52,4 +58,6 @@ def run_summarization(
         finally:
             context.close()
 
-    return _summarize(messages, targets_by_id, on_status, cancel_event)
+    return _summarize(
+        messages, targets_by_id, on_status, cancel_event, group_prompt
+    )

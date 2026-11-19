@@ -54,7 +54,13 @@ class ZaloSummarizerUI:
         notebook.add(self.summarize_tab, text="Summarize")
         self.targets_tab = TargetsTab(notebook, self.colors, on_refresh=self._start_discovery, on_status=self._set_status, log=self._log)
         notebook.add(self.targets_tab, text="Targets")
-        self.prompt_tab = PromptTab(notebook, self.colors, on_status=self._set_status, log=self._log)
+        self.prompt_tab = PromptTab(
+            notebook,
+            self.colors,
+            on_status=self._set_status,
+            log=self._log,
+            on_groups_changed=self._refresh_groups,
+        )
         notebook.add(self.prompt_tab, text="Prompt")
         self.action_buttons = (self.summarize_tab.action_buttons + self.targets_tab.action_buttons + self.prompt_tab.action_buttons)
         ttk.Label(container, text="Activity").pack(anchor="w", pady=(10, 3))
@@ -111,11 +117,18 @@ class ZaloSummarizerUI:
     def _start_job(self, kind: str, label: str, job: Job) -> None:
         self.job_runner.start(kind, label, job)
 
-    def _start_summarization(self, cutoff: datetime) -> None:
-        self._start_job("summarize", "Starting summarization", lambda report, event: run_summarization(cutoff, on_status=report, cancel_event=event))
+    def _start_summarization(
+        self, cutoff: datetime, group_id: str | None
+    ) -> None:
+        self._start_job("summarize", "Starting summarization", lambda report, event: run_summarization(cutoff, on_status=report, cancel_event=event, group_id=group_id))
 
     def _start_discovery(self) -> None:
         self._start_job("discover", "Opening Zalo to refresh targets", lambda report, event: discover_target_conversations(on_status=report, cancel_event=event))
+
+    def _refresh_groups(self) -> None:
+        self.targets_tab.refresh_groups()
+        self.summarize_tab.refresh_groups()
+        self.prompt_tab.refresh_groups()
 
 
 def main() -> None:

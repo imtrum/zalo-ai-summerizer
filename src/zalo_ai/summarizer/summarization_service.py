@@ -6,14 +6,19 @@ class SummarizationService:
     """Coordinate prompt creation and AI-powered summarization."""
 
 
-    def __init__(self, provider: GeminiProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: GeminiProvider | None = None,
+        prompt: str | None = None,
+    ) -> None:
         self.provider = provider or GeminiProvider()
+        self.prompt = prompt
 
     def summarize(self, batch: MessageBatch) -> str:
         """Summarize a batch of messages using the configured AI provider."""
         if not batch.messages:
             raise ValueError("Cannot summarize an empty message batch.")
 
-        prompt = build_summarization_prompt(batch)
-        return self.provider.generate(prompt)
+        request = build_summarization_prompt(batch, self.prompt)
+        return self.provider.generate(request)
 

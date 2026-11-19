@@ -15,6 +15,7 @@ def _summarize(
     targets_by_id: dict[str, dict],
     on_status: ProgressCallback | None,
     cancel_event: Event | None,
+    prompt: str | None = None,
 ) -> dict[str, str]:
     """Return a summary for each target represented in the messages."""
     check_cancellation(cancel_event)
@@ -22,7 +23,10 @@ def _summarize(
         raise ValueError("No messages were collected after the selected cutoff.")
 
     notify(on_status, "Generating summaries.")
-    summarization_service = SummarizationService(provider=create_provider())
+    summarization_service = SummarizationService(
+        provider=create_provider(),
+        prompt=prompt,
+    )
     batch_service = BatchSummarizationService(
         summarization_service=summarization_service
     )

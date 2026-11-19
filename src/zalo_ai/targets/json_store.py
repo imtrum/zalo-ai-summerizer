@@ -60,6 +60,13 @@ def _validate_target(target: Any, index: int) -> None:
         raise ValueError(
             f"Target at index {index} must have a boolean 'enabled'."
         )
+    groups = target.get("groups", [])
+    if not isinstance(groups, list) or not all(
+        isinstance(group_id, str) for group_id in groups
+    ):
+        raise ValueError(
+            f"Target at index {index} must have a list of group IDs."
+        )
 
 
 def load_targets() -> list[dict[str, Any]]:
@@ -79,13 +86,42 @@ def load_targets() -> list[dict[str, Any]]:
     return targets
 
 
-def get_enabled_targets() -> list[dict[str, Any]]:
-    """Return only enabled targets."""
+def get_enabled_targets(
+    group_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return enabled targets, optionally limited to one group."""
+    if group_id is not None:
+        from .group_store import load_groups
+
+        if group_id not in {group["id"] for group in load_groups()}:
+            raise ValueError(f"Group '{group_id}' was not found.")
     return [
         target
         for target in load_targets()
         if target["enabled"] is True
+        and (
+            group_id is None
+            or group_id in target.get("groups", [])
+        )
     ]
+
+
+def set_target_groups(target_id: str, group_ids: list[str]) -> None:
+    """Replace a target's group assignments."""
+    from .group_store import load_groups
+
+    known_ids = {group["id"] for group in load_groups()}
+    if any(group_id not in known_ids for group_id in group_ids):
+        raise ValueError("One or more selected groups no longer exist.")
+    if len(set(group_ids)) != len(group_ids):
+        raise ValueError("A target cannot be assigned to a group twice.")
+    data = _read_data()
+    for target in data["targets"]:
+        if target.get("id") == target_id:
+            target["groups"] = group_ids.copy()
+            _write_data(data)
+            return
+    raise ValueError(f"Target '{target_id}' was not found.")
 
 
 def add_target(target: dict[str, Any]) -> None:

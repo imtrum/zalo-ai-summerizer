@@ -2,6 +2,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 from zalo_ai.config.timezone import VN_TZ
+from zalo_ai.targets.group_store import load_groups
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
@@ -16,12 +17,13 @@ class SummarizeTab(Theme):
         self,
         parent: ttk.Notebook,
         colors: dict[str, str],
-        on_start: Callable[[datetime], None],
+        on_start: Callable[[datetime, str | None], None],
         on_status: Callable[[str], None],
     ) -> None:
         super().__init__(parent, colors=colors, padding=14)
         self.on_start = on_start
         self.on_status = on_status
+        self.group_ids: dict[str, str] = {}
         self.action_buttons: list[ttk.Button] = []
         self._build()
 
@@ -69,12 +71,25 @@ class SummarizeTab(Theme):
             text="Only messages at or after this time will be collected.",
         ).grid(row=2, column=0, sticky="w", pady=(0, 12))
 
+        group_row = ttk.Frame(self)
+        group_row.grid(row=3, column=0, sticky="w", pady=(0, 10))
+        ttk.Label(group_row, text="Conversation group").pack(side="left")
+        self.group_value = tk.StringVar(value="All enabled conversations")
+        self.group_selector = ttk.Combobox(
+            group_row,
+            textvariable=self.group_value,
+            state="readonly",
+            width=30,
+        )
+        self.group_selector.pack(side="left", padx=(8, 0))
+        self.refresh_groups()
+
         self.summarize_button = ttk.Button(
             self,
             text="Start summarization",
             command=self._start,
         )
-        self.summarize_button.grid(row=3, column=0, sticky="w")
+        self.summarize_button.grid(row=4, column=0, sticky="w")
         self.action_buttons.append(self.summarize_button)
 
         ttk.Label(
@@ -84,7 +99,7 @@ class SummarizeTab(Theme):
                 "only if you need to sign in."
             ),
             wraplength=760,
-        ).grid(row=4, column=0, sticky="w", pady=(14, 0))
+        ).grid(row=5, column=0, sticky="w", pady=(14, 0))
 
         results_frame = ttk.LabelFrame(
             self,
@@ -92,13 +107,13 @@ class SummarizeTab(Theme):
             padding=8,
         )
         results_frame.grid(
-            row=5,
+            row=6,
             column=0,
             sticky="nsew",
             pady=(14, 0),
         )
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(5, weight=1)
+        self.rowconfigure(6, weight=1)
 
         self.results = ScrolledText(
             results_frame,
@@ -130,7 +145,22 @@ class SummarizeTab(Theme):
             "Summarization is running. Results will appear here when "
             "processing finishes."
         )
-        self.on_start(cutoff)
+        self.on_start(cutoff, self.selected_group_id())
+
+    def refresh_groups(self) -> None:
+        selected_id = self.group_ids.get(self.group_value.get())
+        groups = load_groups()
+        self.group_ids = {group["name"]: group["id"] for group in groups}
+        values = ["All enabled conversations", *self.group_ids]
+        self.group_selector.configure(values=values)
+        selected_name = next(
+            (group["name"] for group in groups if group["id"] == selected_id),
+            None,
+        )
+        self.group_value.set(selected_name or values[0])
+
+    def selected_group_id(self) -> str | None:
+        return self.group_ids.get(self.group_value.get())
 
     def set_results_text(self, text: str) -> None:
         self.results.configure(state="normal")
